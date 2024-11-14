@@ -1,0 +1,6 @@
+.vscode/
+workdir_*
+mklivepatch
+elfutils
+deku
+build/

@@ -1,0 +1,283 @@
+// Copyright (c) 2024 Google LLC
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package main
+
+import "errors"
+
+const (
+	// No error
+	NO_ERROR = 0
+
+	// Unknown error
+	ERROR_UNKNOWN = 5
+
+	// Kernel and module are not synced
+	ERROR_NOT_SYNCED = 10
+
+	// Kernel livepatch is not enabled
+	ERROR_KLP_IS_NOT_ENABLED = 11
+
+	// Invalid kernel source directory
+	ERROR_INVALID_KERN_SRC_DIR = 12
+
+	// No deploy type
+	ERROR_NO_DEPLOY_TYPE = 13
+
+	// No deploy parameters
+	ERROR_NO_DEPLOY_PARAMS = 14
+
+	// Invalid deploy type
+	ERROR_INVALID_DEPLOY_TYPE = 15
+
+	// Failed to load module
+	ERROR_LOAD_MODULE = 16
+
+	// Failed to apply kernel livepatch
+	ERROR_APPLY_KLP = 17
+
+	// Failed to find afdo tool
+	ERROR_CANT_FIND_AFDO = 18
+
+	// Failed to find symbol index
+	ERROR_CANT_FIND_SYM_INDEX = 19
+
+	// Failed to find symbol
+	ERROR_CANT_FIND_SYMBOL = 20
+
+	// No working directory
+	ERROR_NO_WORKDIR = 21
+
+	// Failed to generate livepatch module
+	ERROR_GENERATE_LIVEPATCH_MODULE = 22
+
+	// Failed to build module
+	ERROR_BUILD_MODULE = 23
+
+	// Not support cold function
+	ERROR_NO_SUPPORT_COLD_FUN = 24
+
+	// Forbidden modify
+	ERROR_FORBIDDEN_MODIFY = 25
+
+	// Not support multi function
+	ERROR_NO_SUPPORT_MULTI_FUNC = 26
+
+	// Failed to extract symbols
+	ERROR_EXTRACT_SYMBOLS = 27
+
+	// Unsupported changes
+	ERROR_UNSUPPORTED_CHANGES = 28
+
+	// Change call to origin
+	ERROR_CHANGE_CALL_TO_ORIGIN = 29
+
+	// Unsupported read mostly
+	ERROR_UNSUPPORTED_READ_MOSTLY = 30
+
+	// Unsupported ref sym from module
+	ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE = 31
+
+	// No board parameter
+	ERROR_NO_BOARD_PARAM = 32
+
+	// Insufficient build parameters
+	ERROR_INSUFFICIENT_BUILD_PARAMS = 33
+
+	// Invalid kernel on device
+	ERROR_INVALID_KERNEL_ON_DEVICE = 34
+
+	// Working directory exists
+	ERROR_WORKDIR_EXISTS = 35
+
+	// Board not exists
+	ERROR_BOARD_NOT_EXISTS = 36
+
+	// Invalid parameters
+	ERROR_INVALID_PARAMETERS = 37
+
+	// No build directory
+	ERROR_NO_BUILDDIR = 38
+
+	// Invalid build directory
+	ERROR_INVALID_BUILDDIR = 39
+
+	// Build directory in crossdk
+	ERROR_BUILDDIR_IN_CROSSDK = 40
+
+	// Failed to find object file
+	ERROR_CANT_FIND_OBJ = 41
+
+	// Dependent kernel module is not present on the target
+	ERROR_DEPEND_MODULE_NOT_LOADED = 43
+
+	// Permission denied
+	ERROR_PERMISSION_DENIED = 44
+
+	// Failed to upload files on the device
+	ERROR_UPLOAD_FILES = 45
+)
+
+func errorStrToCode(err error) int {
+	switch err.Error() {
+	case "NO_ERROR":
+		return NO_ERROR
+	case "ERROR_UNKNOWN":
+		return ERROR_UNKNOWN
+	case "ERROR_NOT_SYNCED":
+		return ERROR_NOT_SYNCED
+	case "ERROR_KLP_IS_NOT_ENABLED":
+		return ERROR_KLP_IS_NOT_ENABLED
+	case "ERROR_INVALID_KERN_SRC_DIR":
+		return ERROR_INVALID_KERN_SRC_DIR
+	case "ERROR_NO_DEPLOY_TYPE":
+		return ERROR_NO_DEPLOY_TYPE
+	case "ERROR_NO_DEPLOY_PARAMS":
+		return ERROR_NO_DEPLOY_PARAMS
+	case "ERROR_INVALID_DEPLOY_TYPE":
+		return ERROR_INVALID_DEPLOY_TYPE
+	case "ERROR_LOAD_MODULE":
+		return ERROR_LOAD_MODULE
+	case "ERROR_APPLY_KLP":
+		return ERROR_APPLY_KLP
+	case "ERROR_CANT_FIND_AFDO":
+		return ERROR_CANT_FIND_AFDO
+	case "ERROR_CANT_FIND_SYM_INDEX":
+		return ERROR_CANT_FIND_SYM_INDEX
+	case "ERROR_CANT_FIND_SYMBOL":
+		return ERROR_CANT_FIND_SYMBOL
+	case "ERROR_NO_WORKDIR":
+		return ERROR_NO_WORKDIR
+	case "ERROR_GENERATE_LIVEPATCH_MODULE":
+		return ERROR_GENERATE_LIVEPATCH_MODULE
+	case "ERROR_BUILD_MODULE":
+		return ERROR_BUILD_MODULE
+	case "ERROR_NO_SUPPORT_COLD_FUN":
+		return ERROR_NO_SUPPORT_COLD_FUN
+	case "ERROR_FORBIDDEN_MODIFY":
+		return ERROR_FORBIDDEN_MODIFY
+	case "ERROR_NO_SUPPORT_MULTI_FUNC":
+		return ERROR_NO_SUPPORT_MULTI_FUNC
+	case "ERROR_EXTRACT_SYMBOLS":
+		return ERROR_EXTRACT_SYMBOLS
+	case "ERROR_UNSUPPORTED_CHANGES":
+		return ERROR_UNSUPPORTED_CHANGES
+	case "ERROR_CHANGE_CALL_TO_ORIGIN":
+		return ERROR_CHANGE_CALL_TO_ORIGIN
+	case "ERROR_UNSUPPORTED_READ_MOSTLY":
+		return ERROR_UNSUPPORTED_READ_MOSTLY
+	case "ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE":
+		return ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE
+	case "ERROR_NO_BOARD_PARAM":
+		return ERROR_NO_BOARD_PARAM
+	case "ERROR_INSUFFICIENT_BUILD_PARAMS":
+		return ERROR_INSUFFICIENT_BUILD_PARAMS
+	case "ERROR_INVALID_KERNEL_ON_DEVICE":
+		return ERROR_INVALID_KERNEL_ON_DEVICE
+	case "ERROR_WORKDIR_EXISTS":
+		return ERROR_WORKDIR_EXISTS
+	case "ERROR_BOARD_NOT_EXISTS":
+		return ERROR_BOARD_NOT_EXISTS
+	case "ERROR_INVALID_PARAMETERS":
+		return ERROR_INVALID_PARAMETERS
+	case "ERROR_NO_BUILDDIR":
+		return ERROR_NO_BUILDDIR
+	case "ERROR_INVALID_BUILDDIR":
+		return ERROR_INVALID_BUILDDIR
+	case "ERROR_BUILDDIR_IN_CROSSDK":
+		return ERROR_BUILDDIR_IN_CROSSDK
+	case "ERROR_CANT_FIND_OBJ":
+		return ERROR_CANT_FIND_OBJ
+	case "ERROR_DEPEND_MODULE_NOT_LOADED":
+		return ERROR_DEPEND_MODULE_NOT_LOADED
+	case "ERROR_PERMISSION_DENIED":
+		return ERROR_PERMISSION_DENIED
+	case "ERROR_UPLOAD_FILES":
+		return ERROR_UPLOAD_FILES
+	default:
+		return ERROR_UNKNOWN
+	}
+}
+
+func mkError(errCode int) error {
+	str := "ERROR_UNKNOWN"
+	switch errCode {
+	case NO_ERROR:
+		str = "NO_ERROR"
+	case ERROR_UNKNOWN:
+		str = "ERROR_UNKNOWN"
+	case ERROR_NOT_SYNCED:
+		str = "ERROR_NOT_SYNCED"
+	case ERROR_KLP_IS_NOT_ENABLED:
+		str = "ERROR_KLP_IS_NOT_ENABLED"
+	case ERROR_INVALID_KERN_SRC_DIR:
+		str = "ERROR_INVALID_KERN_SRC_DIR"
+	case ERROR_NO_DEPLOY_TYPE:
+		str = "ERROR_NO_DEPLOY_TYPE"
+	case ERROR_NO_DEPLOY_PARAMS:
+		str = "ERROR_NO_DEPLOY_PARAMS"
+	case ERROR_INVALID_DEPLOY_TYPE:
+		str = "ERROR_INVALID_DEPLOY_TYPE"
+	case ERROR_LOAD_MODULE:
+		str = "ERROR_LOAD_MODULE"
+	case ERROR_APPLY_KLP:
+		str = "ERROR_APPLY_KLP"
+	case ERROR_CANT_FIND_AFDO:
+		str = "ERROR_CANT_FIND_AFDO"
+	case ERROR_CANT_FIND_SYM_INDEX:
+		str = "ERROR_CANT_FIND_SYM_INDEX"
+	case ERROR_CANT_FIND_SYMBOL:
+		str = "ERROR_CANT_FIND_SYMBOL"
+	case ERROR_NO_WORKDIR:
+		str = "ERROR_NO_WORKDIR"
+	case ERROR_GENERATE_LIVEPATCH_MODULE:
+		str = "ERROR_GENERATE_LIVEPATCH_MODULE"
+	case ERROR_BUILD_MODULE:
+		str = "ERROR_BUILD_MODULE"
+	case ERROR_NO_SUPPORT_COLD_FUN:
+		str = "ERROR_NO_SUPPORT_COLD_FUN"
+	case ERROR_FORBIDDEN_MODIFY:
+		str = "ERROR_FORBIDDEN_MODIFY"
+	case ERROR_NO_SUPPORT_MULTI_FUNC:
+		str = "ERROR_NO_SUPPORT_MULTI_FUNC"
+	case ERROR_EXTRACT_SYMBOLS:
+		str = "ERROR_EXTRACT_SYMBOLS"
+	case ERROR_UNSUPPORTED_CHANGES:
+		str = "ERROR_UNSUPPORTED_CHANGES"
+	case ERROR_CHANGE_CALL_TO_ORIGIN:
+		str = "ERROR_CHANGE_CALL_TO_ORIGIN"
+	case ERROR_UNSUPPORTED_READ_MOSTLY:
+		str = "ERROR_UNSUPPORTED_READ_MOSTLY"
+	case ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE:
+		str = "ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE"
+	case ERROR_NO_BOARD_PARAM:
+		str = "ERROR_NO_BOARD_PARAM"
+	case ERROR_INSUFFICIENT_BUILD_PARAMS:
+		str = "ERROR_INSUFFICIENT_BUILD_PARAMS"
+	case ERROR_INVALID_KERNEL_ON_DEVICE:
+		str = "ERROR_INVALID_KERNEL_ON_DEVICE"
+	case ERROR_WORKDIR_EXISTS:
+		str = "ERROR_WORKDIR_EXISTS"
+	case ERROR_BOARD_NOT_EXISTS:
+		str = "ERROR_BOARD_NOT_EXISTS"
+	case ERROR_INVALID_PARAMETERS:
+		str = "ERROR_INVALID_PARAMETERS"
+	case ERROR_NO_BUILDDIR:
+		str = "ERROR_NO_BUILDDIR"
+	case ERROR_INVALID_BUILDDIR:
+		str = "ERROR_INVALID_BUILDDIR"
+	case ERROR_BUILDDIR_IN_CROSSDK:
+		str = "ERROR_BUILDDIR_IN_CROSSDK"
+	case ERROR_CANT_FIND_OBJ:
+		str = "ERROR_CANT_FIND_OBJ"
+	case ERROR_DEPEND_MODULE_NOT_LOADED:
+		str = "ERROR_DEPEND_MODULE_NOT_LOADED"
+	case ERROR_PERMISSION_DENIED:
+		str = "ERROR_PERMISSION_DENIED"
+	case ERROR_UPLOAD_FILES:
+		str = "ERROR_UPLOAD_FILES"
+	}
+
+	return errors.New(str)
+}
