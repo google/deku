@@ -6,8 +6,6 @@
 DEKU (DExterous Kernel Update) - Utility for Linux kernel developers to quickly apply changes from the source code to the running kernel without the need for a system reboot.
 </div>
 
-<video src="doc/DEKU-basic_kernel_update.mp4" width="1015" height="423" controls></video>
-
 <img src="doc/chromiumos_logo.svg" width="40">
 
 _**For ChromiumOS developers:**_
@@ -31,6 +29,9 @@ Go to [ChromiumOS developers README](doc/CHROMIUMOS.md)
 <a name="about"></a>
 ## About the DEKU
 The DEKU is a utility for quickly applying changes from the Linux kernel source code to a running kernel on the device. DEKU uses the kernel livepatching feature to apply changes to a running kernel. This tool is primarily intended for Linux kernel developers, but can also be useful for researchers to learn how the kernel works.
+
+https://github.com/user-attachments/assets/0f717b1e-b6fe-416e-a744-ea395b931841
+
 <a name="prerequisites"></a>
 ## Prerequisites
  - Installed `libelf`
@@ -144,7 +145,7 @@ command. Module is located in `workdir_XXXX/deku_YYYY_ZZZZ/deku_YYYY_ZZZZ.ko`
 <a name="patch"></a>
 ## Use of patch files
 
-<video src="doc/DEKU-basic_kernel_update.mp4" width="1015" height="423" controls></video>
+https://github.com/user-attachments/assets/1d6696c7-cffc-46db-ba10-1b0743edfe0a
 
 To generate a livepatch module from a patch file use the following command
 ```bash
