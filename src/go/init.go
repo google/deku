@@ -19,7 +19,7 @@ type Init struct {
 	config Config
 }
 
-var cacheDir = "." // TODO
+var cacheDir = "."
 
 func (init *Init) getParam(long, short string) string {
 	var value string
@@ -28,6 +28,7 @@ func (init *Init) getParam(long, short string) string {
 	} else if val, ok := init.params[short]; ok {
 		value = val
 	}
+
 	var directories = []string{"builddir", "sourcesdir", "src_inst_dir", "workdir", "cros_sdk"}
 	if slicesContains(directories, long) && len(value) > 0 {
 		if !filepath.IsAbs(value) {
@@ -39,13 +40,21 @@ func (init *Init) getParam(long, short string) string {
 					value = filepath.Join(homeDir, value[2:])
 				}
 			} else {
-				value = filepath.Join(cacheDir, value) + "/"
+				currentPath, err := os.Getwd()
+				if err != nil {
+					LOG_ERR(err, "Fail to fetch current directory")
+					currentPath = "."
+				}
+
+				value = filepath.Join(currentPath, value)
 			}
 		}
+
 		if !strings.HasSuffix(value, "/") {
 			value += "/"
 		}
 	}
+
 	return value
 }
 
@@ -348,12 +357,20 @@ func (init *Init) checkConfig(config *Config) error {
 }
 
 func (init *Init) init() (Config, int, error) {
-	var err error
 	var lastArgIndex int
-	cacheDir, err = os.Getwd() // TODO:
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		LOG_ERR(err, "Fail to fetch current directory")
-		return init.config, 0, errors.New("ERROR_UNKNOWN")
+		LOG_ERR(err, "Fail to fetch user home directory")
+		return init.config, 0, mkError(ERROR_UNKNOWN)
+	}
+
+	cacheDir = homeDir + "/.cache/deku"
+	if !fileExists(cacheDir) {
+		err = os.Mkdir(cacheDir, os.ModePerm)
+		if err != nil {
+			LOG_ERR(err, "Fail to create deku cache directory in %s", cacheDir)
+			return init.config, 0, mkError(ERROR_UNKNOWN)
+		}
 	}
 
 	init.config, lastArgIndex = init.getConfig()

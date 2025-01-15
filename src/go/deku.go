@@ -214,7 +214,9 @@ func main() {
 		var module dekuModule
 		module, err = build([]dekuModule{})
 		if err == nil && isModuleValid(module) {
-			LOG_INFO("Livepatch module was built: %s", module.KoFile)
+			outFile := filepath.Base(module.KoFile)
+			copyFile(module.KoFile, outFile)
+			LOG_INFO("Livepatch module was built: %s", outFile)
 		}
 	} else if action == "sync" {
 		synchronize()
