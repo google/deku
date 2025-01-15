@@ -94,6 +94,9 @@ Available parameters:
                                           DEKU working more reliable. As an alternative to this
                                           parameter, the 'deku sync' command can be executed after
                                           the kernel has been built to make DEKU work more reliably
+
+-v, --verbose                             turn verbose mode
+-h, -?, --help                            print this information
 ```
 
 ### Example usage

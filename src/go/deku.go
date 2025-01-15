@@ -115,15 +115,58 @@ func prepareConfig() int {
 	return lastArgIndex
 }
 
+func printUsage() {
+	text :=
+`Usage:
+./deku -b <PATH_TO_KERNEL_BUILD_DIR> --target <USER@DUT_ADDRESS[:PORT]> [COMMAND]
+
+Commands list:
+    deploy [default]                      deploy the changes to the device. This command requires
+                                          root permissions. This is default command
+    livepatch                             build livepatch module
+    sync                                  synchronize information about kernel source code.
+                                          It is recommended after fresh building the kernel to
+                                          improve the reliability of DEKU, although it is not
+                                          mandatory. However, when using the --src_inst_dir
+                                          parameter, running this command after building the kernel
+                                          is unnecessary, as DEKU's reliability is already enhanced
+                                          by this parameter
+
+Available parameters:
+    -b, --builddir                        path to kernel build directory
+    -s, --sourcesdir                      path to kernel sources directory. Use this parameter if
+                                          DEKU can't find kernel sources dir
+    -p, --patch                           patch file from witch generate livepatch module or apply
+                                          changes on the device
+    --target=<USER@DUT_ADDRESS[:PORT]>    SSH connection parameter to the target device. The given
+                                          user must be able to load and unload kernel modules. The
+                                          SSH must be configured to use key-based authentication.
+                                          Below is an example with this parameter
+    --ssh_options=<"-o ...">              options for SSH. Below is an example with this parameter
+    --src_inst_dir=<PATH>                 directory with the kernel sources that were installed
+                                          after the kernel was built. Having this directory makes
+                                          DEKU working more reliable. As an alternative to this
+                                          parameter, the 'deku sync' command can be executed after
+                                          the kernel has been built to make DEKU work more reliably
+
+-v, --verbose                             turn verbose mode
+-h, -?, --help                            print this information
+`
+	println(text)
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		LOG_ERR(nil, "Not enough parameters")
+		printUsage()
 		os.Exit(1)
 	}
 
 	for _, arg := range os.Args {
-		if arg == "-v" {
+		if arg == "-v" || arg == "--verbose" {
 			LOG_LEVEL = 1
+		} else if arg == "-h" || arg == "--help" || arg == "-?" {
+			printUsage()
+			os.Exit(0)
 		}
 	}
 
@@ -176,7 +219,7 @@ func main() {
 	} else if action == "sync" {
 		synchronize()
 	} else {
-		LOG_ERR(nil, "Invalid command: %s", action)
+		LOG_ERR(nil, "Invalid command: %s.\nUse --help parameter to see valid usage", action)
 		os.Exit(1)
 	}
 
