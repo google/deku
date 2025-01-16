@@ -584,10 +584,6 @@ func generateModule(patches []dekuPatch, cumulativeModule bool) (dekuModule, err
 	}
 
 	err = adjustRelocations(module)
-	if false {
-		exec.Command("find", moduleDir, "-name", "*o", "-type", "f", "-exec", "./elfsql", "{}", "{}.db", ";").Run()
-	}
-
 	if err != nil {
 		LOG_DEBUG("Fail to adjust relocations: %s", err)
 		return invalidateModule(module), err
@@ -612,12 +608,7 @@ func generateModule(patches []dekuPatch, cumulativeModule bool) (dekuModule, err
 		return invalidateModule(module), err
 	}
 
-	objcopy := "objcopy"
-	if config.isAARCH64 {
-		objcopy = "aarch64-cros-linux-gnu-objcopy"
-	}
-
-	cmd := exec.Command(objcopy, "--add-section", ".note.deku="+noteFile,
+	cmd := exec.Command(TOOLCHAIN + "objcopy", "--add-section", ".note.deku="+noteFile,
 	"--set-section-flags", ".note.deku=alloc,readonly", module.KoFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

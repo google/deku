@@ -201,8 +201,8 @@ func buildModules(moduleDir string) error {
 	cmd := exec.Command("make")
 	cmd.Dir = moduleDir
 	if config.isAARCH64 {
-		cmd.Env = append(cmd.Env, "ARCH=arm64")
-		cmd.Env = append(cmd.Env, "CROSS_COMPILE=" + TOOLCHAIN)
+		cmd.Args = append(cmd.Args, "ARCH=arm64")
+		cmd.Args = append(cmd.Args, "CROSS_COMPILE=" + TOOLCHAIN)
 	}
 
 	if config.useLLVM != "" {

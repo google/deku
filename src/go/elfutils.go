@@ -7,8 +7,6 @@ package main
 /*
 #include <stdlib.h>
 #include "../elfutils.h"
-
-#cgo LDFLAGS: ${SRCDIR}/../../build/libelfutils.a -lbfd -lopcodes -lelf
 */
 import "C"
 import (

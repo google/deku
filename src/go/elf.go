@@ -120,7 +120,7 @@ func checkIsTraceable(file string, funName string) (bool, []string) {
 		}
 
 		for _, section := range e.Sections {
-			if section.Type == elf.SHT_RELA && section.Name == "rela__patchable_function_entries" {
+			if section.Type == elf.SHT_RELA && section.Name == ".rela__patchable_function_entries" {
 				for i := 0; i < int(section.Size); i += elf.Sym64Size {
 					bytes := make([]byte, elf.Sym64Size)
 					section.ReadAt(bytes, int64(i))
