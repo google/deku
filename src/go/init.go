@@ -185,11 +185,25 @@ func (init *Init) isKlpEnabled(linuxHeadersDir string) bool {
 	return bytes.Contains(systemMap, []byte("klp_enable_patch"))
 }
 
+func populateCrosWorkdir(workdir string) {
+	if fileExists(workdir + "/testing_rsa") {
+		return
+	}
+
+	var GCLIENT_ROOT = "~/chromiumos/"
+	copyFile(GCLIENT_ROOT+"/src/third_party/chromiumos-overlay/chromeos-base/chromeos-ssh-testkeys/files/testing_rsa",
+		workdir+"/testing_rsa")
+	os.Chmod(workdir+"/testing_rsa", 0400)
+}
+
 func (init *Init) checkConfigForCros(config *Config) error {
+	const tempWorkdirName = "workdir_temp"
+	var overrideWorkdir = false
 	var baseDir = ""
 	if config.crosPath != "" {
 		baseDir = config.crosPath + "chroot/"
 	}
+
 	insideCros := fileExists("/etc/cros_chroot_version")
 	if !insideCros {
 		LOG_ERR(nil, "Build kernel for Chromebook outside of CrOS SDK is not supported yet")
@@ -197,16 +211,17 @@ func (init *Init) checkConfigForCros(config *Config) error {
 	}
 
 	if config.workdir == "" {
-		config.workdir = cacheDir + "/workdir_" + config.crosBoard + "/"
-	}
-	os.MkdirAll(config.workdir, 0755)
+		workdirName := "workdir_" + config.crosBoard + "/"
+		if config.crosBoard == "" {
+			workdirName = tempWorkdirName + "/"
+		}
 
-	if !fileExists(config.workdir + "testing_rsa") {
-		var GCLIENT_ROOT = "~/chromiumos/"
-		copyFile(GCLIENT_ROOT+"/src/third_party/chromiumos-overlay/chromeos-base/chromeos-ssh-testkeys/files/testing_rsa",
-			config.workdir+"testing_rsa")
-		os.Chmod(config.workdir+"testing_rsa", 0400)
+		config.workdir = cacheDir + workdirName
+		overrideWorkdir = true
 	}
+
+	os.MkdirAll(config.workdir, 0755)
+	populateCrosWorkdir(config.workdir)
 
 	if config.sshOptions == "" {
 		config.sshOptions = " -o IdentityFile=" + config.workdir + "/testing_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -q"
@@ -228,6 +243,11 @@ func (init *Init) checkConfigForCros(config *Config) error {
 		if config.crosBoard == "" || err != nil {
 			LOG_ERR(nil, "Failure to connect to Chromebook and retrieve board name")
 			return mkError(ERROR_NO_BOARD_PARAM)
+		}
+
+		if overrideWorkdir {
+			config.workdir = cacheDir + "workdir_" + config.crosBoard + "/"
+			populateCrosWorkdir(config.workdir)
 		}
 	}
 
@@ -364,7 +384,7 @@ func (init *Init) init() (Config, int, error) {
 		return init.config, 0, mkError(ERROR_UNKNOWN)
 	}
 
-	cacheDir = homeDir + "/.cache/deku"
+	cacheDir = homeDir + "/.cache/deku/"
 	if !fileExists(cacheDir) {
 		err = os.Mkdir(cacheDir, os.ModePerm)
 		if err != nil {
