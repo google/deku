@@ -62,11 +62,13 @@ char *disassemble(const char *filePath, const char *symName, bool convertToReloc
 {
 	char *disassembled = NULL;
 	int fd;
+	Context ctx = {0};
+
 	Elf *elf = openElf(filePath, true, &fd);
 	if (elf == NULL)
 		goto err;
 
-	Context ctx = initContext(elf, filePath);
+	ctx = initContext(elf, filePath);
 	GElf_Sym sym;
 	int res = getSymbolByNameAndType(elf, symName, STT_FUNC, &sym);
 	if (res == -1)

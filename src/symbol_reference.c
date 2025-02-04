@@ -88,6 +88,9 @@ static int findSymbolsRelatingTo(Context *ctx, GElf_Sym *sym)
 		DisasmData dissData = { .sym = s[0]->sym, .shdr = shdr, .abfd = abfd,
 								.symData = symData, .data = sym, .ctx = ctx };
 
+		if (applyStaticKeys(ctx->elf, &s[0]->sym, (uint8_t *)data->d_buf) != 0)
+			return -1;
+
 		disassemble_info disasmInfo = { 0 };
 #ifdef DISASSEMBLY_STYLE_SUPPORT
 		disassembler_ftype disasm = initDisassembler(&dissData, NULL,

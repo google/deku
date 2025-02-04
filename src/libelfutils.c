@@ -336,6 +336,62 @@ GElf_Sym getSymbolByOffset(Elf *elf, Elf64_Section shndx, int offset, bool exact
 	return InvalidSym;
 }
 
+GElf_Sym getSymbolByAbsoluteOffset(Elf *elf, int offset, bool exact)
+{
+	GElf_Shdr shdr;
+	GElf_Sym sym;
+	Elf_Scn *scn = getSectionByName(elf, ".symtab");
+	if (scn == NULL)
+		return InvalidSym;
+
+	Elf_Data *data = elf_getdata(scn, NULL);
+	if (data == NULL)
+		return InvalidSym;
+
+	if (gelf_getshdr(scn, &shdr) == NULL)
+		return InvalidSym;
+
+	scn = NULL;
+	Elf64_Section shndx = SHN_UNDEF;
+	int i=0;
+	while ((scn = elf_nextscn(elf, scn)) != NULL)
+	{
+		GElf_Shdr shdr;
+		if (gelf_getshdr(scn, &shdr) == NULL)
+			return InvalidSym;
+
+		if (shdr.sh_type == SHT_PROGBITS && (shdr.sh_flags == (SHF_ALLOC | SHF_EXECINSTR)) &&
+			shdr.sh_offset >= offset && shdr.sh_offset + shdr.sh_size > offset)
+		{
+			shndx = elf_ndxscn(scn);
+			offset -= shdr.sh_offset;
+			break;
+		}
+		i++;
+	}
+
+	if (shndx == SHN_UNDEF)
+		return InvalidSym;
+
+	size_t cnt = shdr.sh_size / shdr.sh_entsize;
+	for (size_t i = 0; i < cnt; i++)
+	{
+		if (gelf_getsym(data, i, &sym) == NULL)
+			return InvalidSym;
+
+		if (sym.st_name != 0 && sym.st_shndx == shndx)
+		{
+			if (exact && sym.st_value == offset)
+				return sym;
+			else if (!exact && offset >= sym.st_value &&
+					 offset < sym.st_value + sym.st_size)
+				return sym;
+		}
+	}
+
+	return InvalidSym;
+}
+
 char *appendFormatString(char *buf, const char *format, ...)
 {
 	char localBuf[512];

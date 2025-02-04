@@ -448,7 +448,7 @@ static char *findModifiedSymbols(Context *ctx)
 			return NULL;
 
 		if (sym.st_size == 0 || sym.st_shndx == 0 ||
-			sym.st_shndx >= ctx->symbolsCount || sym.st_name == 0)
+			sym.st_name == 0 || sym.st_shndx >= ctx->sectionsCount)
 			continue;
 
 		const char *name = elf_strptr(ctx->elf, shdr.sh_link, sym.st_name);

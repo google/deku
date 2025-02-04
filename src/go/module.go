@@ -201,9 +201,9 @@ func generateDiffObject(patchName string, file string) ([]string, error) {
 	}
 
 	err = extractSymbols(oFile, patchDir+"/patch.o", removeDuplicate(extractSyms),
-			DEKU_PATCH_REF_SYM_PREFIX+patchName)
+		DEKU_PATCH_REF_SYM_PREFIX+patchName)
 	if err != nil {
-		LOG_ERR(errors.New(out), "Failed to extract modified symbols for %s", file)
+		LOG_ERR(mkError(ERROR_EXTRACT_SYMBOLS), "Failed to extract modified symbols for %s", file)
 		return nil, err
 	}
 

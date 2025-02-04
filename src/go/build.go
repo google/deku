@@ -323,8 +323,24 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 	// or the file has not changed since last check
 	sourcesFiles = []string{}
 	for _, file := range files {
+		addFile := false
 		name := generatePatchName(file)
-		if !fileExists(filepath.Join(config.workdir, name, "id")) {
+		if fileExists(filepath.Join(config.workdir, name, "id")) {
+			addFile = true
+			// check if any module contains this patch
+			for _, module := range prevModules {
+				for _, patch := range module.Patches {
+					if patch.Name == name {
+						addFile = false
+						break
+					}
+				}
+			}
+		} else {
+			addFile = true
+		}
+
+		if addFile {
 			sourcesFiles = append(sourcesFiles, file)
 		}
 	}

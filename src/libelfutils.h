@@ -78,6 +78,7 @@ GElf_Sym getSymbolByName(Elf *elf, const char *name, size_t *symIndex, bool defi
 GElf_Sym getSymbolByIndex(Elf *elf, size_t index);
 int getSymbolByNameAndType(Elf *elf, const char *symName, const int type, GElf_Sym *sym);
 GElf_Sym getSymbolByOffset(Elf *elf, Elf64_Section shndx, int offset,bool exactSymbol);
+GElf_Sym getSymbolByAbsoluteOffset(Elf *elf, int offset, bool exact);
 int getSymbolIndex(Elf *elf, const GElf_Sym *sym);
 GElf_Shdr getSectionHeader(Elf *elf, Elf64_Section index);
 Elf_Scn *getRelForSectionIndex(Elf *elf, Elf64_Section index);

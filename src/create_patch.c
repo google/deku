@@ -339,7 +339,10 @@ static size_t copySymbol(Context *ctx, size_t index, bool copySec)
 	{
 		Elf_Scn *scn = copySection(ctx, originSym.st_shndx, true);
 		if (scn == NULL)
+		{
+			LOG_ERR("Failed to copy section index: %u", originSym.st_shndx);
 			return -1;
+		}
 
 		newSym.st_shndx = elf_ndxscn(scn);
 		if (newSym.st_shndx == SHN_UNDEF)
@@ -377,6 +380,7 @@ static size_t copySymbol(Context *ctx, size_t index, bool copySec)
 										.shdr = shdr, .symData = symData };
 				if (convertToRelocations(&dissData) != 0)
 				{
+					LOG_ERR("Failed to convert to relocations");
 					free(funName);
 					return -1;
 				}
@@ -452,7 +456,10 @@ static int copiedSymbolsRelocFilter(Context *ctx, Elf_Data *data, size_t index,
 		index = (index / 3) * 3;
 
 	if (gelf_getrela(data, index, &rela) == NULL)
+	{
+		LOG_ERR("Failed to get relocation for index: %zu for %s section", index, secName);
 		return -1;
+	}
 
 	if (strcmp("__jump_table", secName) == 0)
 	{
@@ -464,7 +471,10 @@ static int copiedSymbolsRelocFilter(Context *ctx, Elf_Data *data, size_t index,
 		sym = getSymbolByIndex(ctx->secondElf,
 							   ctx->symbols[symbol->index]->copiedIndex);
 		if (invalidSym(sym))
+		{
+			LOG_ERR("Cant find symbol with index: %zu", symbol->index);
 			return -1;
+		}
 
 		if (sym.st_size == 0)
 			return 0;
@@ -523,7 +533,10 @@ static int copyRelSection(Context *ctx, Elf64_Section relSecIndex, size_t secInd
 {
 	Elf_Scn *outScn = copySection(ctx, relSecIndex, false);
 	if (outScn == NULL)
+	{
+		LOG_ERR("Failed to copy relocation section index: %u", relSecIndex);
 		return -1;
+	}
 
 	const char *secName = getSectionName(ctx->secondElf, secIndex);
 	if (secName == NULL)
@@ -582,7 +595,10 @@ static int copyRelSection(Context *ctx, Elf64_Section relSecIndex, size_t secInd
 		{
 			int res = filter(ctx, data, i, secName);
 			if (res == -1)
+			{
+				LOG_ERR("Failed to filter relocation");
 				return -1;
+			}
 
 			if (res == 0)
 				continue;
@@ -608,7 +624,10 @@ static int copyRelSection(Context *ctx, Elf64_Section relSecIndex, size_t secInd
 		{
 			newSymIndex = copySymbol(ctx, symIndex, true);
 			if ((int)newSymIndex < 0)
+			{
+				LOG_ERR("Failed to copy symbol index: %zu", symIndex);
 				return -1;
+			}
 		}
 		else
 		{
@@ -625,7 +644,10 @@ static int copyRelSection(Context *ctx, Elf64_Section relSecIndex, size_t secInd
 						   strstr(sym->name, "__UNIQUE_ID_ddebug") != NULL;
 			newSymIndex = copySymbol(ctx, sym->index, copySec);
 			if ((int)newSymIndex < 0)
+			{
+				LOG_ERR("Failed to copy symbol index: %zu", sym->index);
 				return -1;
+			}
 
 			if (fromSym != NULL &&
 				(rType == R_X86_64_PC32 || rType == R_X86_64_PLT32 ||
@@ -662,7 +684,10 @@ static Elf_Scn *copySectionWithRel(Context *ctx, Elf64_Section index,
 {
 	Elf_Scn *newScn = copySection(ctx, index, true);
 	if (newScn == NULL)
+	{
+		LOG_ERR("Failed to copy section index: %u", index);
 		return NULL;
+	}
 
 	Elf_Scn *relScn = getRelForSectionIndex(ctx->elf, index);
 	if (relScn == NULL)
@@ -678,7 +703,10 @@ static Elf_Scn *copySectionWithRel(Context *ctx, Elf64_Section index,
 
 	int relaCount = copyRelSection(ctx, indexFrom, indexTo, fromSym, filter);
 	if (relaCount < 0)
+	{
+		LOG_ERR("Failed to copy relocations for section index: %u", index);
 		return NULL;
+	}
 
 	// trim section data if it's contains only zeros to size depends on how many relocations are present for specific sections
 	int dataSize = 0;
@@ -888,7 +916,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 	".orc_unwind_ip", ".initcall4.init", ".meminit.text", "__tracepoints"
 	*/
 	const char *extraSections[] = {".altinstructions",
-								   ".altinstr_aux",
+								   /*".altinstr_aux",*/
 								   ".altinstr_replacement",
 								   "__bug_table",
 								   "__jump_table",
@@ -903,7 +931,10 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 			LOG_DEBUG("Copy %s section", extraSections[i]);
 			scn = copySectionWithRel(ctx, elf_ndxscn(scn), NULL, copiedSymbolsRelocFilter);
 			if (scn == NULL)
+			{
+				LOG_ERR("Can't copy %s section", extraSections[i]);
 				goto err;
+			}
 
 			size_t index = elf_ndxscn(scn);
 			if (index == SHN_UNDEF)

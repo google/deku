@@ -211,6 +211,12 @@ GElf_Sym getTargetSymbolForInstruction(bfd_vma vma, DisasmData *data,  uint8_t *
 	{
 		uint32_t addr = data->sym.st_value + vma;
 		sym = getSymbolByOffset(data->ctx->elf, data->sym.st_shndx, addr, true);
+		if (invalidSym(sym))
+		{
+			GElf_Shdr shdr = getSectionHeader(data->ctx->elf, data->sym.st_shndx);
+			uint32_t addr = data->sym.st_value + vma + shdr.sh_offset;
+			sym = getSymbolByAbsoluteOffset(data->ctx->elf, addr, false);
+		}
 	}
 
 	*offset = operandOff;
@@ -270,11 +276,8 @@ static void printFunAtAddr(bfd_vma vma, struct disassemble_info *inf)
 
 	if (symOffset != 0)
 		res = (*inf->fprintf_func)(inf->stream, "<%s+0x%X>", name, symOffset);
-	else if (operand == 0 || vma == 0 || vma == sym.st_value)
-		res = (*inf->fprintf_func)(inf->stream, "%s", name);
 	else
-		res = (*inf->fprintf_func)(inf->stream, "<%s+0x%lX>", name,
-								   vma - data->sym.st_value);
+		res = (*inf->fprintf_func)(inf->stream, "%s", name);
 	if (res < 0)
 	{
 		data->result = -1;
@@ -486,6 +489,22 @@ int convertToRelocations(DisasmData *data)
 	return 0;
 }
 
+int getAddrForRelaSymbol(Elf *elf, GElf_Rela *rela)
+{
+	GElf_Sym sym = getSymbolByIndex(elf, ELF64_R_SYM(rela->r_info));
+	if (invalidSym(sym))
+		return -1;
+
+	if (ELF64_ST_TYPE(sym.st_info) != STT_SECTION)
+		return -1;
+
+	GElf_Shdr shdr = getSectionHeader(elf, sym.st_shndx);
+	if (invalidShdr(shdr))
+		return -1;
+
+	return shdr.sh_offset + rela->r_addend;
+}
+
 /*
  * @return 0 on success, otherwise non-zero
  */
@@ -549,8 +568,13 @@ int applyStaticKeys(Elf *elf, const GElf_Sym *sym, uint8_t *bytes)
 		}
 		else if (memcmp(bytes + rela.r_addend, &nop5, sizeof(nop5)) == 0) // 5-bytes nop
 		{
+			int sourceSymAddr = getAddrForRelaSymbol(elf, &rela);
+			int targetSymAddr = getAddrForRelaSymbol(elf, &jmpRela);
+			if (sourceSymAddr == -1 || targetSymAddr == -1)
+				return -1;
+
 			bytes[rela.r_addend] = 0xE9;
-			*(uint32_t *)(bytes + rela.r_addend + 1) = jmpRela.r_addend - rela.r_addend - 5;
+			*(uint32_t *)(bytes + rela.r_addend + 1) = targetSymAddr - sourceSymAddr - 5;
 		}
 		else if (memcmp(bytes + rela.r_addend, &nopAARCH64, sizeof(nopAARCH64)) == 0)
 		{
