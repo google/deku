@@ -331,17 +331,24 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 		addFile := false
 		name := generatePatchName(file)
 		if fileExists(filepath.Join(config.workdir, name, "id")) {
-			addFile = true
-			// check if any module contains this patch
-			for _, module := range prevModules {
-				for _, patch := range module.Patches {
-					if patch.Name == name {
-						addFile = false
-						break
+			if fileExists(filepath.Join(config.workdir, name, "patch.o")) {
+				// check the case when previous run build a patch but failed on build a module
+				addFile = true
+				// check if any module contains this patch
+				for _, module := range prevModules {
+					for _, patch := range module.Patches {
+						if patch.Name == name {
+							addFile = false
+							break
+						}
 					}
 				}
+			} else {
+				// if "id" exists without "patch.o" then file doesn't contains any valid changes
+				addFile = false
 			}
 		} else {
+			// add the file if there's no patch for this file
 			addFile = true
 		}
 
