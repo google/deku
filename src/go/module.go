@@ -171,16 +171,19 @@ func generateDiffObject(patchName string, file string) ([]string, error) {
 			}
 		}
 
-		traceable, callers := checkIsTraceable(originObjFile, fun)
-		if !traceable && len(callers) == 0 {
-			LOG_ERR(nil, "Can't apply changes to the '%s' because the '%s' function is forbidden to modify.", file, fun)
+		traceable, traceableCallers, nonTraceableCallers := checkIsTraceable(originObjFile, fun)
+		if !traceable && len(traceableCallers) == 0 {
+			LOG_ERR(nil, "Can't apply changes to '%s'. The '%s' function is not allowed to modify.", file, fun)
 			return nil, errors.New("ERROR_FORBIDDEN_MODIFY")
 		}
 
 		if traceable {
 			modSyms = append(modSyms, fun)
 		} else {
-			for _, sym := range callers {
+			for _, sym := range nonTraceableCallers {
+				extractSyms = append(extractSyms, sym)
+			}
+			for _, sym := range traceableCallers {
 				modSyms = append(modSyms, sym)
 				extractSyms = append(extractSyms, sym)
 			}

@@ -117,6 +117,9 @@ const (
 
 	// Failed to upload files on the device
 	ERROR_UPLOAD_FILES = 45
+
+	// Function is not traceable
+	ERROR_NOT_TRACEABLE = 46
 )
 
 func errorStrToCode(err error) int {

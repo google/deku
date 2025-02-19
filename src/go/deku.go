@@ -7,7 +7,6 @@ package main
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -167,26 +166,6 @@ func main() {
 		} else if arg == "-h" || arg == "--help" || arg == "-?" {
 			printUsage()
 			os.Exit(0)
-		}
-	}
-
-	if os.Args[1] == "filenameNoExt" {
-		text := filenameNoExt(os.Args[2])
-		fmt.Print(text)
-		return
-	} else if os.Args[1] == "isTraceable" {
-		traceable, _ := checkIsTraceable(os.Args[2], os.Args[3])
-		if traceable {
-			os.Exit(0)
-		} else {
-			os.Exit(1)
-		}
-	} else if os.Args[1] == "noTraceable" {
-		traceable, _ := checkIsTraceable(os.Args[2], os.Args[3])
-		if traceable {
-			os.Exit(0)
-		} else {
-			os.Exit(1)
 		}
 	}
 

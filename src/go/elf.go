@@ -75,6 +75,16 @@ func (e ELF) getSymbolByName(name string) (elf.Symbol, uint32, error) {
 	return elf.Symbol{}, 0, errors.New(fmt.Sprintf("Can't find symbol with name: ", name))
 }
 
+func (e ELF) getSymbolByNameAndType(name string, symType elf.SymType) elf.Symbol {
+	for _, sym := range e.Symbols {
+		if sym.Name == name && elf.ST_TYPE(sym.Info) == symType {
+			return sym
+		}
+	}
+
+	return elf.Symbol{}
+}
+
 func (e ELF) getRelocsForFunction(funName string) ([]elf.Rela64, error) {
 	var result []elf.Rela64
 	sym, _, err := e.getSymbolByName(funName)
@@ -97,101 +107,139 @@ func (e ELF) getRelocsForFunction(funName string) ([]elf.Rela64, error) {
 	return result, nil
 }
 
-func checkIsTraceable(file string, funName string) (bool, []string) {
-	e, err := Open(file)
+func isTraceableAArch64(e *ELF, funName string) bool {
+	sym, _, err := e.getSymbolByName(funName)
 	if err != nil {
-		return false, []string{}
+		LOG_ERR(err, "Can't find function symbol %s", funName)
+		return false
 	}
-	defer e.Close()
 
-	var isTraceableAARCH64 = func(funName string) bool {
-		sym, _, err := e.getSymbolByName(funName)
-		if err != nil {
-			LOG_ERR(err, "Can't find function symbol %s in the %s", funName, file)
-			return false
+	symSecIndex := 0
+	for i, symbol := range e.Symbols {
+		if elf.ST_TYPE(symbol.Info) == elf.STT_SECTION && symbol.Section == sym.Section {
+			symSecIndex = i + 1
+			break
 		}
+	}
 
-		symSecIndex := 0
-		for i, symbol := range e.Symbols {
-			if elf.ST_TYPE(symbol.Info) == elf.STT_SECTION && symbol.Section == sym.Section {
-				symSecIndex = i + 1
-				break
-			}
-		}
-
-		for _, section := range e.Sections {
-			if section.Type == elf.SHT_RELA && section.Name == ".rela__patchable_function_entries" {
-				for i := 0; i < int(section.Size); i += elf.Sym64Size {
-					bytes := make([]byte, elf.Sym64Size)
-					section.ReadAt(bytes, int64(i))
-					rela := *(*elf.Rela64)(unsafe.Pointer(&bytes[0]))
-					if int(elf.R_SYM64(rela.Info)) == symSecIndex && uint64(rela.Addend) == sym.Value {
-						return true
-					}
+	for _, section := range e.Sections {
+		if section.Type == elf.SHT_RELA && section.Name == ".rela__patchable_function_entries" {
+			for i := 0; i < int(section.Size); i += elf.Sym64Size {
+				bytes := make([]byte, elf.Sym64Size)
+				section.ReadAt(bytes, int64(i))
+				rela := *(*elf.Rela64)(unsafe.Pointer(&bytes[0]))
+				if int(elf.R_SYM64(rela.Info)) == symSecIndex && uint64(rela.Addend) == sym.Value {
+					return true
 				}
 			}
 		}
+	}
 
+	return false
+}
+
+func isTraceablex86(e *ELF, funName string) bool {
+	_, fentryIdx, err := e.getSymbolByName("__fentry__")
+	if err != nil {
 		return false
 	}
 
-	var isTraceablex86_64 = func(funName string) bool {
-		_, fentryIdx, err := e.getSymbolByName("__fentry__")
-		if err != nil {
-			return false
+	relocs, err := e.getRelocsForFunction(funName)
+	if err == nil && len(relocs) > 0 {
+		if elf.R_SYM64(relocs[0].Info) == fentryIdx {
+			return true
+		}
+	}
+	return false
+}
+
+func findTraceableCallers(file, funName, rootFun string, traceableCallers, nonTraceableCallers []string, e *ELF) ([]string, []string, error) {
+	refersFrom, err := referenceFrom(file, funName)
+	if err != nil {
+		return traceableCallers, nonTraceableCallers, err
+	}
+
+	if len(refersFrom) == 0 {
+		LOG_DEBUG("Couldn't find traceable (in)direct caller of %s", rootFun)
+		return traceableCallers, nonTraceableCallers, mkError(ERROR_NOT_TRACEABLE)
+	}
+
+	for _, rSym := range strings.Split(refersFrom, "\n") {
+		rSymName := rSym[2:]
+		if rSym[:2] == "v:" {
+			LOG_DEBUG("The non-traceable function %s is (in)directly referenced from variable %s", rootFun, rSymName)
+			return traceableCallers, nonTraceableCallers, mkError(ERROR_NOT_TRACEABLE)
 		}
 
-		relocs, err := e.getRelocsForFunction(funName)
-		if err == nil && len(relocs) > 0 {
-			if elf.R_SYM64(relocs[0].Info) == fentryIdx {
-				return true
+		if funName == rSymName || rootFun == rSymName || slicesContains(traceableCallers, rSymName) || slicesContains(nonTraceableCallers, rSymName) {
+			continue
+		}
+
+		var isTraceable = false
+		if config.isAARCH64 {
+			isTraceable = isTraceableAArch64(e, rSymName)
+		} else {
+			isTraceable = isTraceablex86(e, rSymName)
+		}
+
+		if isTraceable {
+			LOG_DEBUG("The non-traceable function %s is (in)directly called from traceable function %s", rootFun, rSymName)
+			traceableCallers = append(traceableCallers, rSymName)
+		} else {
+			if elf.ST_BIND(e.getSymbolByNameAndType(rSymName, elf.STT_FUNC).Info) != elf.STB_LOCAL {
+				LOG_DEBUG("The non-traceable function %s is (in)directly called from other non-traceable function %s that is not local", rootFun, rSymName)
+				return traceableCallers, nonTraceableCallers, mkError(ERROR_NOT_TRACEABLE)
+			}
+
+			LOG_DEBUG("The non-traceable function %s is (in)directly called from other non-traceable function %s", rootFun, rSymName)
+			nonTraceableCallers = append(nonTraceableCallers, rSymName)
+			traceableCallers, nonTraceableCallers, err = findTraceableCallers(file, rSymName, rootFun, traceableCallers, nonTraceableCallers, e)
+			if err != nil {
+				return traceableCallers, nonTraceableCallers, mkError(ERROR_NOT_TRACEABLE)
 			}
 		}
-		return false
 	}
 
-	var isTraceable func(string) bool
+	return traceableCallers, nonTraceableCallers, nil
+}
+
+func checkIsTraceable(file string, funName string) (bool, []string, []string) {
+	e, err := Open(file)
+	if err != nil {
+		return false, []string{}, []string{}
+	}
+	defer e.Close()
+
+	var isTraceable = false
 	if config.isAARCH64 {
-		isTraceable = isTraceableAARCH64
+		isTraceable = isTraceableAArch64(e, funName)
 	} else {
-		isTraceable = isTraceablex86_64
+		isTraceable = isTraceablex86(e, funName)
 	}
 
-	if isTraceable(funName) {
-		return true, []string{}
+	if isTraceable {
+		return true, []string{}, []string{}
 	}
 
 	sym, _, err := e.getSymbolByName(funName)
 	if err != nil {
 		LOG_WARN("Can't find function %s in the %s", funName, file)
-		return false, []string{}
+		return false, []string{}, []string{}
 	}
 
 	if elf.ST_BIND(sym.Info) != elf.STB_LOCAL {
 		LOG_DEBUG("The '%s' function is forbidden to modify. The function is non-local", funName)
-		return false, []string{}
+		return false, []string{}, []string{}
 	}
 
-	refersFrom, err := referenceFrom(file, funName)
-	if err != nil {
-		return false, []string{}
+	traceableCallers, nonTraceableCallers := []string{}, []string{}
+	traceableCallers, nonTraceableCallers, err = findTraceableCallers(file, funName, funName, traceableCallers, nonTraceableCallers, e)
+	if err != nil || len(traceableCallers) == 0 {
+		LOG_DEBUG("The '%s' function has no traceable callers", funName)
+		return false, []string{}, []string{}
 	}
 
-	if len(refersFrom) == 0 {
-		return false, []string{}
-	}
-
-	callers := []string{}
-	LOG_DEBUG("The '%s' function is forbidden to modify. This function is called from:\n%s", funName, refersFrom)
-	for _, rSym := range strings.Split(refersFrom, "\n") {
-		if rSym[:2] == "v:" || !isTraceable(rSym[2:]) {
-			LOG_DEBUG("The %s is not traceable", rSym)
-			return false, []string{}
-		}
-		callers = append(callers, rSym[2:])
-	}
-
-	return false, callers
+	return false, traceableCallers, nonTraceableCallers
 }
 
 func checkIfIsInitOrExit(file string, funName string) bool {
