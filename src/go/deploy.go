@@ -321,11 +321,12 @@ func loadModules(modulesToLoad, modulesToUnload []dekuModule) error {
 		}
 		filesToUpload = append(filesToUpload, scriptPath)
 
-		if _, err := runSSHCommand("mkdir -p " + REMOTE_DIR); err != nil {
+		if out, err := runSSHCommand("mkdir -p " + REMOTE_DIR); err != nil {
+			LOG_ERR(nil, "Error during creating remote directory: %s", out)
 			return err
 		}
 
-		runSSHCommand("rm " + REMOTE_DIR + "/*.ko > /dev/null 2>&1");
+		runSSHCommand("rm " + REMOTE_DIR + "/*.ko > /dev/null 2>&1")
 		out, err := uploadFiles(filesToUpload)
 		if err != nil {
 			LOG_ERR(err, "Error during upload files on the device:%s", out)

@@ -199,6 +199,7 @@ func populateCrosWorkdir(workdir string) {
 func (init *Init) checkConfigForCros(config *Config) error {
 	const tempWorkdirName = "workdir_temp"
 	var overrideWorkdir = false
+	var overrideSshOptions = false
 	var baseDir = ""
 	if config.crosPath != "" {
 		baseDir = config.crosPath + "chroot/"
@@ -225,6 +226,7 @@ func (init *Init) checkConfigForCros(config *Config) error {
 
 	if config.sshOptions == "" {
 		config.sshOptions = " -o IdentityFile=" + config.workdir + "/testing_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -q"
+		overrideSshOptions = true
 	}
 
 	if config.deployParams != "" && !strings.Contains(config.deployParams, "@") {
@@ -244,9 +246,13 @@ func (init *Init) checkConfigForCros(config *Config) error {
 			LOG_ERR(nil, "Failure to connect to Chromebook and retrieve board name")
 			return mkError(ERROR_NO_BOARD_PARAM)
 		}
-
 		if overrideWorkdir {
 			config.workdir = cacheDir + "workdir_" + config.crosBoard + "/"
+			if overrideSshOptions {
+				config.sshOptions = " -o IdentityFile=" + config.workdir + "/testing_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -q"
+			}
+
+			os.MkdirAll(config.workdir, 0755)
 			populateCrosWorkdir(config.workdir)
 		}
 	}
