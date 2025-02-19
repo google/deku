@@ -360,7 +360,7 @@ func cleanUpPatch(patch dekuPatch) {
 	}
 }
 
-func generatePatch(file string, explicitModified bool) (dekuPatch, error) {
+func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, error) {
 	var err error
 	patch := dekuPatch{
 		SrcFile: file,
@@ -484,7 +484,12 @@ func generatePatch(file string, explicitModified bool) (dekuPatch, error) {
 			logFunc = LOG_DEBUG
 		}
 
-		logFunc("No valid changes found in '%s'", file)
+		if prevExists {
+			logFunc("Reverting changes from %s", file)
+		} else {
+			logFunc("No valid changes found in %s", file)
+		}
+
 		err = os.WriteFile(patchDir+"/id", []byte(patch.Id), 0644)
 		if err != nil {
 			LOG_ERR(err, "Failed to write patch ID to file for %s", file)

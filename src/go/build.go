@@ -119,10 +119,12 @@ func getValidPatches() []dekuPatch {
 	return patches
 }
 
-func cleanupWorkdir(modules []dekuModule) {
+func cleanupWorkdir(modules []dekuModule) []string {
+	removedPatches := []string{}
+
 	files, err := os.ReadDir(config.workdir)
 	if err != nil {
-		return
+		return removedPatches
 	}
 
 	// remove outdated files ID from FILES_ID
@@ -134,9 +136,9 @@ func cleanupWorkdir(modules []dekuModule) {
 		currentFileId, err := generatePatchId(filePath)
 		if err != nil {
 			LOG_ERR(err, "Failed to generate file ID")
-			return
+			return removedPatches
 		}
-		if (currentFileId == fileId) {
+		if currentFileId == fileId {
 			newFilesId += file + " " + currentFileId + "\n"
 		}
 	}
@@ -144,7 +146,7 @@ func cleanupWorkdir(modules []dekuModule) {
 	err = os.WriteFile(filepath.Join(config.workdir, FILES_ID), []byte(newFilesId), 0644)
 	if err != nil {
 		LOG_ERR(err, "Failure to write files ID to file")
-		return
+		return removedPatches
 	}
 
 	patches := getValidPatches()
@@ -170,6 +172,7 @@ func cleanupWorkdir(modules []dekuModule) {
 				srcFile, _ := os.ReadFile(filepath.Join(path, FILE_SRC_PATH))
 				if id, _ := generatePatchId(string(srcFile)); string(patchId) != id {
 					toRemove = append(toRemove, path)
+					removedPatches = append(removedPatches, string(srcFile))
 					LOG_DEBUG("Patch ID for %s is outdated", entry.Name())
 				}
 			}
@@ -190,7 +193,7 @@ func cleanupWorkdir(modules []dekuModule) {
 			}
 
 			toRemove = append(toRemove, path)
-			checkNextModuleDir:
+		checkNextModuleDir:
 		}
 	}
 
@@ -200,6 +203,8 @@ func cleanupWorkdir(modules []dekuModule) {
 			LOG_ERR(err, "Failed to remove directory: %s", dir)
 		}
 	}
+
+	return removedPatches
 }
 
 func checkPatchesDependency(patches []dekuPatch) (bool, error) {
@@ -278,7 +283,7 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 	var cros Cros
 
 	prevModules := getDekuModules(false)
-	cleanupWorkdir(prevModules)
+	removedPatches := cleanupWorkdir(prevModules)
 
 	modifiedFiles := modifiedFiles()
 	if len(modifiedFiles) == 0 {
@@ -404,7 +409,8 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 		go func(i int, file string) {
 			defer func() { wg.Done(); <-ch }()
 			explicitModified := slicesContains(modifiedFiles, file)
-			patch, e := generatePatch(file, explicitModified)
+			prevPatchExisted := slicesContains(removedPatches, file)
+			patch, e := generatePatch(file, explicitModified, prevPatchExisted)
 			if e != nil {
 				err = e
 				LOG_ERR(err, "Failed to process %s", file)
