@@ -255,7 +255,7 @@ func generateLivepatchSource(moduleDir string, patches []dekuPatch, cumulativeMo
 #include <linux/module.h>
 #include <linux/livepatch.h>
 #include <linux/version.h>
-`	)
+`)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func generateLivepatchSource(moduleDir string, patches []dekuPatch, cumulativeMo
 	for objName, klpFunc := range klpFuncPerObjFile {
 		// Add livepatching code.
 		_, err = outFile.WriteString(`
-static struct klp_func deku_funcs_`+objName+`[] = {`+klpFunc+` { }
+static struct klp_func deku_funcs_` + objName + `[] = {` + klpFunc + ` { }
 };
 		`)
 		if err != nil {
@@ -301,19 +301,19 @@ static struct klp_func deku_funcs_`+objName+`[] = {`+klpFunc+` { }
 		}
 		klpObjects += `
 {
-	.name = `+klpObjName+`,
-	.funcs = deku_funcs_`+objName+`,
+	.name = ` + klpObjName + `,
+	.funcs = deku_funcs_` + objName + `,
 },`
 	}
 
 	_, err = outFile.WriteString(`
-static struct klp_object deku_objs[] = {`+klpObjects+` { }
+static struct klp_object deku_objs[] = {` + klpObjects + ` { }
 };
 
 static struct klp_patch deku_patch = {
 	.mod = THIS_MODULE,
 	.objs = deku_objs,
-	.replace = `+replaceModule+`,
+	.replace = ` + replaceModule + `,
 };
 	`)
 	if err != nil {
@@ -444,18 +444,18 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 	if !fileExists(filePath) {
 		filePath = config.kernelSrcDir + file
 	}
-	err = copyFile(filePath, patchDir + "/" + baseName)
+	err = copyFile(filePath, patchDir+"/"+baseName)
 	if err != nil {
 		LOG_ERR(err, "Failed to copy source file for %s", file)
 		return invalidatePatch(patch), err
 	}
 
-	originObjectFile := config.buildDir+filepath.Dir(file)+"/"+fileName+".o"
+	originObjectFile := config.buildDir + filepath.Dir(file) + "/" + fileName + ".o"
 	if LOG_LEVEL <= 1 {
 		copyFile(originObjectFile, patchDir+"/_"+fileName+".o")
 	}
 
-	outFile := patchDir+"/"+fileName+".o"
+	outFile := patchDir + "/" + fileName + ".o"
 	err = buildFile(file, patchDir+"/"+baseName, outFile)
 	if err != nil {
 		LOG_ERR(err, "Error while build %s", file)
@@ -514,7 +514,7 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 		return invalidatePatch(patch), err
 	}
 
-	os.OpenFile(patchDir + "/.patch.o.cmd", os.O_RDONLY|os.O_CREATE, 0644)
+	os.OpenFile(patchDir+"/.patch.o.cmd", os.O_RDONLY|os.O_CREATE, 0644)
 
 	err = os.WriteFile(patchDir+"/id", []byte(patch.Id), 0644)
 	if err != nil {
@@ -527,8 +527,8 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 
 func generateModule(patches []dekuPatch, cumulativeModule bool) (dekuModule, error) {
 	module := dekuModule{
-		Name: fmt.Sprintf("%s_%d", generateBaseModuleName(patches), time.Now().Unix()),
-		Patches: patches,
+		Name:       fmt.Sprintf("%s_%d", generateBaseModuleName(patches), time.Now().Unix()),
+		Patches:    patches,
 		Cumulative: cumulativeModule,
 	}
 
@@ -604,7 +604,7 @@ func generateModule(patches []dekuPatch, cumulativeModule bool) (dekuModule, err
 	for _, patch := range module.Patches {
 		text += patch.Name + ":" + patch.SrcFile + ":"
 		for _, symbol := range patch.ModFuncs {
-			text += symbol+ ";"
+			text += symbol + ";"
 		}
 		text = strings.TrimSuffix(text, ";")
 		text += "|"
@@ -616,8 +616,8 @@ func generateModule(patches []dekuPatch, cumulativeModule bool) (dekuModule, err
 		return invalidateModule(module), err
 	}
 
-	cmd := exec.Command(TOOLCHAIN + "objcopy", "--add-section", ".note.deku="+noteFile,
-	"--set-section-flags", ".note.deku=alloc,readonly", module.KoFile)
+	cmd := exec.Command(TOOLCHAIN+"objcopy", "--add-section", ".note.deku="+noteFile,
+		"--set-section-flags", ".note.deku=alloc,readonly", module.KoFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()

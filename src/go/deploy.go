@@ -134,7 +134,7 @@ func deploy() error {
 	for _, module := range modulesToLoad {
 		for _, patch := range module.Patches {
 			for _, modSym := range patch.ModFuncs {
-				patchedSymbols = append(patchedSymbols, patch.SrcFile + ":" + modSym)
+				patchedSymbols = append(patchedSymbols, patch.SrcFile+":"+modSym)
 			}
 		}
 	}
@@ -292,7 +292,7 @@ func generateLoadScript(modulesToLoad, modulesToUnload []dekuModule) (string, er
 		insmod += "echo \"" + module.SrcFiles + " done\"\n"
 	}
 
-	reloadScript += "\n" + insmod +"\n" + unload
+	reloadScript += "\n" + insmod + "\n" + unload
 	// remove deprecated deku modules
 	reloadScript += `find /sys/module -name "deku_*" -type d -exec sh -c '$1 $(basename $2) 2>/dev/null' sh "$RMMOD" {} \;`
 

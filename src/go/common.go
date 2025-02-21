@@ -224,12 +224,12 @@ func modifiedFiles() []string {
 
 		fileStat, err := os.Stat(config.filesSrcDir + path)
 		if err != nil {
-			LOG_ERR(err, "Can't get stats for file: %s", config.filesSrcDir + path)
+			LOG_ERR(err, "Can't get stats for file: %s", config.filesSrcDir+path)
 			return nil
 		}
 
 		if isCFile, _ := filepath.Match("*.c", fileStat.Name()); !isCFile {
-			isHFile, _ := filepath.Match("*.h", fileStat.Name());
+			isHFile, _ := filepath.Match("*.h", fileStat.Name())
 			if !isHFile || slicesContains(ignoredFilesH, path) {
 				return nil
 			}
@@ -246,20 +246,20 @@ func modifiedFiles() []string {
 					return err
 				}
 
-				LOG_ERR(err, "Can't get stats for file: %s", config.filesSrcDir + path)
+				LOG_ERR(err, "Can't get stats for file: %s", config.filesSrcDir+path)
 				return nil
 			}
 
 			if originFileStat != nil {
 				f1, err := os.ReadFile(config.filesSrcDir + path)
 				if err != nil {
-					LOG_ERR(err, "Failed to read file: %s", config.filesSrcDir + path)
+					LOG_ERR(err, "Failed to read file: %s", config.filesSrcDir+path)
 					return nil
 				}
 
 				f2, err := os.ReadFile(config.kernSrcInstallDir + path)
 				if err != nil {
-					LOG_ERR(err, "Failed to read file: %s", config.kernSrcInstallDir + path)
+					LOG_ERR(err, "Failed to read file: %s", config.kernSrcInstallDir+path)
 					return nil
 				}
 
@@ -494,7 +494,7 @@ func getKernelConfigHash() string {
 	hasher := crc32.NewIEEE()
 	if _, err := io.Copy(hasher, file); err != nil {
 		LOG_ERR(err, "Can't generate hash for .config file")
-		return "";
+		return ""
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil))
@@ -529,7 +529,7 @@ func parseDekuModuleFromNote(note string) dekuModule {
 	}
 
 	module := dekuModule{
-		Name: arr[0],
+		Name:     arr[0],
 		ModuleId: arr[1],
 	}
 
@@ -549,11 +549,11 @@ func parseDekuModuleFromNote(note string) dekuModule {
 			continue
 		}
 
-		patch := dekuPatch {
-			Name: pArr[0],
-			SrcFile: pArr[1],
+		patch := dekuPatch{
+			Name:     pArr[0],
+			SrcFile:  pArr[1],
 			ModFuncs: sArr,
-			Id: patchesId[i],
+			Id:       patchesId[i],
 		}
 		module.Patches = append(module.Patches, patch)
 		module.SrcFiles += patch.SrcFile + ","
@@ -589,12 +589,12 @@ func getDekuModules(includeUnloadModule bool) []dekuModule {
 			continue
 		}
 		patch := dekuPatch{
-			SrcFile:	string(srcFile),
-			Name:		patchDir.Name(),
-			ObjPath:	string(objPath),
-			PatchFile:	patchFile,
-			Id:			string(patchId),
-			ModFuncs: 	readLines(filepath.Join(patchDirPath, MOD_SYMBOLS_FILE)),
+			SrcFile:   string(srcFile),
+			Name:      patchDir.Name(),
+			ObjPath:   string(objPath),
+			PatchFile: patchFile,
+			Id:        string(patchId),
+			ModFuncs:  readLines(filepath.Join(patchDirPath, MOD_SYMBOLS_FILE)),
 		}
 
 		patches = append(patches, patch)
@@ -625,7 +625,7 @@ func getDekuModules(includeUnloadModule bool) []dekuModule {
 			}
 		}
 
-		if ((includeUnloadModule && len(module.Patches) == 0 && module.ModuleId == "")) ||
+		if (includeUnloadModule && len(module.Patches) == 0 && module.ModuleId == "") ||
 			(len(module.Patches) == len(strings.Split(module.ModuleId, ","))) {
 			modules = append(modules, module)
 		}

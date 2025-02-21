@@ -80,9 +80,9 @@ func cmdBuildFile(srcFile string) ([]string, string, error) {
 		return nil, "", err
 	}
 
-	newCmd := []string{cmd[0], "-iquote "+config.filesSrcDir+dir, "-iquote "+config.kernelSrcDir+dir}
+	newCmd := []string{cmd[0], "-iquote " + config.filesSrcDir + dir, "-iquote " + config.kernelSrcDir + dir}
 
-	for i := 1; i < len(cmd) - 1 /* skip last param */; i++ {
+	for i := 1; i < len(cmd)-1; /* skip last param */ i++ {
 		if !strings.HasPrefix(cmd[i], "-I") {
 			newCmd = append(newCmd, cmd[i])
 		} else {
@@ -106,9 +106,9 @@ func cmdBuildFile(srcFile string) ([]string, string, error) {
 			}
 
 			if fileExists(inc) {
-				newCmd = append(newCmd, "-I" + inc)
+				newCmd = append(newCmd, "-I"+inc)
 			}
-			newCmd = append(newCmd, "-I" + originInc)
+			newCmd = append(newCmd, "-I"+originInc)
 		}
 	}
 	cmd = newCmd
@@ -151,9 +151,9 @@ func buildFile(srcFile, compileFile, outFile string) error {
 
 	cmd = append(cmd, cmdPrefixMap(filepath.Dir(compileFile), filepath.Dir(srcFile))...)
 	cmd = append(cmd, cmdPrefixMap(config.kernelSrcDir, "")...)
-	cmd = append(cmd, cmdPrefixMap(config.kernelSrcDir + "./", "")...)
+	cmd = append(cmd, cmdPrefixMap(config.kernelSrcDir+"./", "")...)
 	cmd = append(cmd, cmdPrefixMap(config.filesSrcDir, "")...)
-	cmd = append(cmd, cmdPrefixMap(config.filesSrcDir + "./", "")...)
+	cmd = append(cmd, cmdPrefixMap(config.filesSrcDir+"./", "")...)
 	cmd = append(cmd, "-o", outFile, compileFile)
 
 	execCmd := exec.Command("bash", "-c", strings.Join(cmd, " ")) // FIXME:Do not use a bash
@@ -202,7 +202,7 @@ func buildModules(moduleDir string) error {
 	cmd.Dir = moduleDir
 	if config.isAARCH64 {
 		cmd.Args = append(cmd.Args, "ARCH=arm64")
-		cmd.Args = append(cmd.Args, "CROSS_COMPILE=" + TOOLCHAIN)
+		cmd.Args = append(cmd.Args, "CROSS_COMPILE="+TOOLCHAIN)
 	}
 
 	if config.useLLVM != "" {

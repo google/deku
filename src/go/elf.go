@@ -332,7 +332,7 @@ func getUndefinedSymbols(objFile string) ([]elf.Symbol, error) {
 			(elf.ST_TYPE(symbol.Info) == elf.STT_OBJECT ||
 				elf.ST_TYPE(symbol.Info) == elf.STT_FUNC ||
 				elf.ST_TYPE(symbol.Info) == elf.STT_NOTYPE) {
-			symbol.Value = uint64(i+1)
+			symbol.Value = uint64(i + 1)
 			symbols = append(symbols, symbol)
 		}
 	}

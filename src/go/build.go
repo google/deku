@@ -33,8 +33,8 @@ func findFilesUsingHeaders(dir string, headerFiles []string) []string {
 
 			scanner := bufio.NewScanner(file)
 			relPath := strings.Replace(path[len(dir):], "/.", "/", 1)
-			obj := relPath[:len(relPath) - len(".cmd")]
-			srcFile := relPath[:len(relPath) - len(".o.cmd")] + ".c"
+			obj := relPath[:len(relPath)-len(".cmd")]
+			srcFile := relPath[:len(relPath)-len(".o.cmd")] + ".c"
 
 			if valid, err := buildInKernel(srcFile); !valid || err != nil {
 				return nil
@@ -104,12 +104,12 @@ func getValidPatches() []dekuPatch {
 		}
 
 		patch := dekuPatch{
-			SrcFile:	string(srcFile),
-			Name:		patchDir.Name(),
-			ObjPath:	string(objPath),
-			PatchFile:	patchFile,
-			Id:			string(patchId),
-			ModFuncs: 	readLines(filepath.Join(patchDirPath, MOD_SYMBOLS_FILE)),
+			SrcFile:   string(srcFile),
+			Name:      patchDir.Name(),
+			ObjPath:   string(objPath),
+			PatchFile: patchFile,
+			Id:        string(patchId),
+			ModFuncs:  readLines(filepath.Join(patchDirPath, MOD_SYMBOLS_FILE)),
 		}
 
 		patches = append(patches, patch)
@@ -297,7 +297,7 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 		filePath := strings.Split(file, " ")[0]
 		if strings.HasSuffix(filePath, ".h") && slicesContains(files, filePath) {
 			index := slicesIndex(files, filePath)
-			files = slicesDelete(files, index, index + 1)
+			files = slicesDelete(files, index, index+1)
 		}
 	}
 
@@ -409,10 +409,10 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 	var err error
 	patches := []dekuPatch{}
 	wg := sync.WaitGroup{}
-    ch := make(chan int, runtime.NumCPU() * 2)
+	ch := make(chan int, runtime.NumCPU()*2)
 	for i, file := range files {
 		wg.Add(1)
-        ch <- 1
+		ch <- 1
 		go func(i int, file string) {
 			defer func() { wg.Done(); <-ch }()
 			explicitModified := slicesContains(modifiedFiles, file)

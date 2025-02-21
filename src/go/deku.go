@@ -46,7 +46,7 @@ func checkWorkdir() {
 
 		cfgStat, err := os.Stat(config.workdir + "config")
 		if err != nil {
-			LOG_ERR(err, "Can't get stats for file: %s", config.workdir + "config")
+			LOG_ERR(err, "Can't get stats for file: %s", config.workdir+"config")
 			goto sync
 		}
 
@@ -116,7 +116,7 @@ func prepareConfig() int {
 
 func printUsage() {
 	text :=
-`Usage:
+		`Usage:
 ./deku -b <PATH_TO_KERNEL_BUILD_DIR> --target <USER@DUT_ADDRESS[:PORT]> [COMMAND]
 
 Commands list:
@@ -175,7 +175,7 @@ func main() {
 
 	var err error
 	if len(config.patches) > 0 {
-		os.MkdirAll(config.workdir + PATCHED_SOURCES_DIR, 0755)
+		os.MkdirAll(config.workdir+PATCHED_SOURCES_DIR, 0755)
 		err := prepareSourcesForPatch(config.patches)
 		if err != nil {
 			os.Exit(1)

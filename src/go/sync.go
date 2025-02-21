@@ -46,7 +46,7 @@ func regenerateSymbols() error {
 
 func generateVmlinuxFilesList() error {
 	kernelSrcDirs := []string{"arch/x86", "block", "certs", "crypto", "drivers", "fs", "init",
-							  "io_uring", "ipc", "kernel", "mm", "net", "security", "sound", "virt"}
+		"io_uring", "ipc", "kernel", "mm", "net", "security", "sound", "virt"}
 
 	outFile, err := os.Create(filepath.Join(config.workdir, VMLINUX_FILES_LIST))
 	if err != nil {
@@ -56,10 +56,10 @@ func generateVmlinuxFilesList() error {
 
 	for _, dir := range kernelSrcDirs {
 		builtIn := readLines(filepath.Join(config.buildDir, dir, "built-in.a"))
-		found := false;
+		found := false
 		for _, line := range builtIn {
 			if srcFile, ok := strings.CutSuffix(line, ".o/"); ok {
-				_, err = outFile.WriteString(filepath.Join(dir, srcFile + ".c") + "\n")
+				_, err = outFile.WriteString(filepath.Join(dir, srcFile+".c") + "\n")
 				if err != nil {
 					return err
 				}
@@ -88,7 +88,7 @@ func generateModulesFilesList() error {
 			baseFile = strings.TrimSuffix(baseFile, ".o")
 		}
 
-		contents, err := os.ReadFile(filepath.Join(config.buildDir, baseFile + ".mod"))
+		contents, err := os.ReadFile(filepath.Join(config.buildDir, baseFile+".mod"))
 		if err != nil {
 			LOG_DEBUG("Can't read .mod file: %s", err)
 			continue
@@ -105,7 +105,6 @@ func generateModulesFilesList() error {
 
 	return nil
 }
-
 
 func synchronize() {
 	LOG_INFO("Synchronize...")
@@ -125,7 +124,7 @@ func synchronize() {
 
 	err := os.RemoveAll(config.workdir + FILES_ID)
 	if err != nil {
-		LOG_ERR(err, "Can't remove %s", config.workdir + FILES_ID)
+		LOG_ERR(err, "Can't remove %s", config.workdir+FILES_ID)
 	}
 
 	workdirCfg := make(map[string]string)

@@ -163,7 +163,7 @@ func (init *Init) isKernelBuildDir(path string) bool {
 func (init *Init) checkConfigEnabled(linuxHeadersDir, flag string) bool {
 	config, err := os.ReadFile(linuxHeadersDir + ".config")
 	if err != nil {
-		LOG_ERR(err, "Failed to read config file: %s", linuxHeadersDir + ".config")
+		LOG_ERR(err, "Failed to read config file: %s", linuxHeadersDir+".config")
 		return false
 	}
 
@@ -178,7 +178,7 @@ func (init *Init) isKlpEnabled(linuxHeadersDir string) bool {
 
 	systemMap, err := os.ReadFile(linuxHeadersDir + "System.map")
 	if err != nil {
-		LOG_ERR(err, "Failed to read System.map file: %s", linuxHeadersDir + "System.map")
+		LOG_ERR(err, "Failed to read System.map file: %s", linuxHeadersDir+"System.map")
 		return false
 	}
 
@@ -288,8 +288,8 @@ func (init *Init) checkConfigForCros(config *Config) error {
 
 	if config.kernelSrcDir == "" && !insideCros {
 		srcDir, err := os.Readlink(config.buildDir + "source")
-		if err != nil  {
-			LOG_ERR(err, "Fail to read link to kernel source file from: %s", config.buildDir + "source")
+		if err != nil {
+			LOG_ERR(err, "Fail to read link to kernel source file from: %s", config.buildDir+"source")
 			return errors.New("ERROR_INVALID_KERN_SRC_DIR")
 		}
 

@@ -92,7 +92,7 @@ type Config struct {
 	filesSrcDir       string
 	ignoreCross       bool
 	isCros            bool
-	isAARCH64		  bool
+	isAARCH64         bool
 	kernSrcInstallDir string
 	kernelSrcDir      string
 	kernelVersion     uint64

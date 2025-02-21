@@ -138,7 +138,7 @@ func getSymbolsToRelocate(module dekuModule, extraSymVers string) ([]relocation,
 		if fileExists(config.linuxHeadersDir + "vmlinux.symvers") { // vmlinux.symvers in some kernel versions is combined into Module.symvers and not exists since v6.3
 			symVers, err := os.ReadFile(config.linuxHeadersDir + "vmlinux.symvers")
 			if err != nil {
-				LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir + "vmlinux.symvers", err)
+				LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir+"vmlinux.symvers", err)
 			}
 
 			if re.FindString(string(symVers)) != "" {
@@ -148,7 +148,7 @@ func getSymbolsToRelocate(module dekuModule, extraSymVers string) ([]relocation,
 
 		symVers, err := os.ReadFile(config.linuxHeadersDir + "Module.symvers")
 		if err != nil {
-			LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir + "Module.symvers", err)
+			LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir+"Module.symvers", err)
 		}
 
 		if re.FindString(string(symVers)) != "" {
@@ -158,7 +158,7 @@ func getSymbolsToRelocate(module dekuModule, extraSymVers string) ([]relocation,
 		if extraSymVers != "" {
 			symVers, err = os.ReadFile(config.linuxHeadersDir + extraSymVers)
 			if err != nil {
-				LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir + "Module.symvers", err)
+				LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir+"Module.symvers", err)
 			}
 
 			if re.FindString(string(symVers)) != "" {
@@ -265,7 +265,7 @@ func adjustRelocations(module dekuModule) error {
 				found := isContainsSymbol(module.KoFile, symbol.Name, symType)
 				if found {
 					LOG_DEBUG("Missing symbol %s found in the own deku module", symbol.Name)
-					continue;
+					continue
 				}
 			}
 			return err
