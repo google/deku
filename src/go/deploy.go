@@ -194,16 +194,25 @@ func generateLoadScript(modulesToLoad, modulesToUnload []dekuModule) (string, er
 	var reloadScript = ""
 	var checkTransition = config.kernelVersion >= versionNum(5, 10, 0) // checking patch transition in not reliable on kernel <5.10
 
-	reloadScript += "cd \"$(dirname \"$0\")\"\n"
-	reloadScript += "INSMOD=insmod\n"
-	reloadScript += "RMMOD=rmmod\n"
-	reloadScript += "TEE=tee\n"
-	reloadScript += "if [ ! $(id -u) -eq 0 ]; then\n"
-	reloadScript += "	INSMOD=\"sudo insmod\"\n"
-	reloadScript += "	RMMOD=\"sudo rmmod\"\n"
-	reloadScript += "	TEE=\"sudo tee\"\n"
-	reloadScript += "fi\n"
+	reloadScript += `#!/bin/sh
+printHangingTask() {
+	local pid=$($GREP -F 0 /proc/*/task/*/patch_state 2>/dev/null | cut -d'/' -f3)
+	local comm=$(cat /proc/$pid/comm 2>/dev/null)
+	echo "The $comm [PID: $pid] blocks the application of changes"
+}
 
+cd "$(dirname "$0")"
+INSMOD=insmod
+RMMOD=rmmod
+TEE=tee
+GREP=grep
+if [ ! $(id -u) -eq 0 ]; then
+	INSMOD="sudo insmod"
+	RMMOD="sudo rmmod"
+	TEE="sudo tee"
+	GREP="sudo grep"
+fi
+`
 	patchOnlyModules := true
 	for _, module := range modulesToLoad {
 		for _, patch := range module.Patches {
@@ -282,7 +291,7 @@ func generateLoadScript(modulesToLoad, modulesToUnload []dekuModule) (string, er
 		if checkTransition {
 			insmod += "for i in $(seq 1 $(($(nproc)*50))); do\n"
 			insmod += "	[ $(cat " + moduleSys + "/transition) = \"0\" ] && break\n"
-			insmod += "	[ $(($i%25)) = 0 ] && echo \"Applying changes for " + module.SrcFiles + " is/are still in progress...\"\n"
+			insmod += "	[ $(($i%25)) = 0 ] && printHangingTask\n"
 			insmod += "	sleep 0.2\n"
 			insmod += "done\n"
 			insmod += "[ $(cat " + moduleSys + "/transition) != \"0\" ] && { echo \"Failed to apply " + moduleName + " $i\"; exit " + fmt.Sprintf("%d", ERROR_APPLY_KLP) + "; }\n"
