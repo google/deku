@@ -79,11 +79,15 @@ Commands list:
                                           by this parameter
 
 Available parameters:
-    -b, --builddir                        path to kernel build directory
-    -s, --sourcesdir                      path to kernel sources directory. Use this parameter if
-                                          DEKU can't find kernel sources dir
-    -p, --patch                           patch file from witch generate livepatch module or apply
-                                          changes on the device
+    -b, --builddir                        path to kernel or out-of-tree module build directory
+    -k, --headersdir                      path to the kernel headers directory for the out-of-tree
+                                          module in case the DEKU can't find the kernel headers.
+                                          This is the same parameter as the -C parameter for the
+                                          `make` command in the Makefile.
+    -s, --sourcesdir                      path to the kernel source directory. Use this parameter if
+                                          DEKU can't find the kernel sources directory
+    -p, --patch                           patch file from which to generate livepatch module or
+                                          apply changes to the device
     --target=<USER@DUT_ADDRESS[:PORT]>    SSH connection parameter to the target device. The given
                                           user must be able to load and unload kernel modules. The
                                           SSH must be configured to use key-based authentication.
@@ -125,6 +129,18 @@ when custom key-based authentication key is used for ssh connection
 > \[!NOTE]
 >
 > Changes applied on the running kernel are not persistent and are life until the next reboot. After every reboot, the operation must be performed again.
+
+Use
+```bash
+./deku -b /home/user/module --target=root@192.168.0.100
+```
+to apply changes to the out-of-tree module if the module was built in the /home/user/module directory.
+
+Use
+```bash
+./deku -b /home/user/module -k /lib/modules/$(shell uname -r)/build --target=root@192.168.0.100
+```
+to apply changes to the out-of-tree module if DEKU can't find linux kernel headers.
 
 Use
 ```bash

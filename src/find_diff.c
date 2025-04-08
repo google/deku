@@ -572,6 +572,24 @@ static char *findModifiedSymbols(Context *ctx)
 	if (!CHECK_ALLOC(result))
 		return NULL;
 
+	// if the only changes are a new variables starts with __func__. then skip it.
+	// this is need beacause varaibles with __func__. prefix are always marked as
+	// DIFF_NEW_VAR, but they are not really new. They are need to copy .rodata
+	bool skipDueNotValidChange = true;
+	for (size_t i = 0; i < ctx->symbolsCount; i++)
+	{
+		DiffResult diff = (uint64_t) ctx->symbols[i]->data;
+		if (diff != DIFF_NEW_VAR ||
+			strstr(ctx->symbols[i]->name, "__func__.") != ctx->symbols[i]->name)
+		{
+			skipDueNotValidChange = false;
+			break;
+		}
+	}
+
+	if (skipDueNotValidChange)
+		return result;
+
 	for (size_t i = 0; i < ctx->symbolsCount; i++)
 	{
 		DiffResult diff = (uint64_t) ctx->symbols[i]->data;

@@ -91,16 +91,15 @@ type Config struct {
 	deployType        string
 	filesSrcDir       string
 	ignoreCross       bool
-	isCros            bool
 	isAARCH64         bool
+	isCros            bool
+	isModule          bool
 	kernSrcInstallDir string
 	kernelSrcDir      string
 	kernelVersion     uint64
 	linuxHeadersDir   string
-	modulesDir        string
 	patches           []string
 	sshOptions        string
-	systemMap         string
 	useLLVM           string
 	workdir           string
 }

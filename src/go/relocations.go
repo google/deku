@@ -50,10 +50,11 @@ func findObjWithSymbol(sym, srcFile, objPath string) (string, error) {
 	}
 
 	srcPath := filepath.Join(config.kernelSrcDir, filepath.Dir(srcFile))
-	modulesPath := filepath.Join(config.modulesDir, filepath.Dir(srcFile))
+	modulesPath := filepath.Join(config.buildDir, filepath.Dir(srcFile))
 	for {
 		files := readLines(filepath.Join(modulesPath, "modules.order"))
 		for _, file := range files {
+			file = strings.TrimPrefix(file, modulesPath)
 			path := filepath.Join(config.workdir, SYMBOLS_DIR, filepath.Dir(file))
 			if !generateSymbols(file) {
 				continue
@@ -88,23 +89,25 @@ func findObjWithSymbol(sym, srcFile, objPath string) (string, error) {
 
 		srcPath = filepath.Dir(srcPath)
 		modulesPath = filepath.Dir(modulesPath)
-		if modulesPath+"/" == config.modulesDir {
+		if modulesPath+"/" == config.buildDir {
 			break
 		}
 	}
 
-	systemMap, err := os.ReadFile(config.systemMap)
-	if err != nil {
-		LOG_ERR(err, "Fail to read System.map: %s", config.systemMap)
-		return "", err
+	if fileExists(config.buildDir + "System.map") {
+		systemMap, err := os.ReadFile(config.buildDir + "System.map")
+		if err != nil {
+			LOG_ERR(err, "Fail to read System.map: %s", config.buildDir+"System.map")
+			return "", err
+		}
+
+		if re.FindString(string(systemMap)) != "" {
+			LOG_DEBUG("Found in: vmlinux")
+			return "vmlinux", nil
+		}
 	}
 
-	if re.FindString(string(systemMap)) != "" {
-		LOG_DEBUG("Found in: vmlinux")
-		return "vmlinux", nil
-	}
-
-	LOG_ERR(err, "Fail to find object file for symbol: %s %s", sym, srcFile)
+	LOG_ERR(nil, "Fail to find object file for symbol: %s %s", sym, srcFile)
 	os.Exit(ERROR_CANT_FIND_SYMBOL)
 
 	return "", errors.New("Symbol not found")
@@ -112,7 +115,7 @@ func findObjWithSymbol(sym, srcFile, objPath string) (string, error) {
 
 func getSymbolsToRelocate(module dekuModule, extraSymVers string) ([]relocation, error) {
 	var syms []relocation
-	ignoreSymbols := []string{"_printk", "__this_module"}
+	ignoreSymbols := []string{"printk", "_printk", "__this_module"}
 	undefinedSymbols, err := getUndefinedSymbols(module.KoFile)
 	if err != nil {
 		LOG_ERR(err, "Failed to fetch undefined symbols for %s", module.KoFile)

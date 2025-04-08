@@ -65,6 +65,27 @@ func cmdFromMod(modFile string, skipParam []string) ([]string, string, error) {
 	return cmd, extraCmd, nil
 }
 
+func findPathForFileFromCmdFile(path, file string) string {
+	cmdFiles, err := filepath.Glob(filepath.Join(
+		path,
+		"*.o.cmd"))
+	if err != nil || len(cmdFiles) == 0 {
+		LOG_ERR(nil, "Can't find any *.o.cmd in the build dir: %s", path)
+		return ""
+	}
+
+	for _, line := range readLines(cmdFiles[0]) {
+		if strings.HasSuffix(line, file+` \`) {
+			line = strings.TrimSuffix(line, ` \`)
+			line = strings.TrimSpace(line)
+			return strings.TrimSuffix(line, file)
+		}
+	}
+
+	LOG_ERR(nil, "Can't find %s in the: %s", file, cmdFiles[0])
+	return ""
+}
+
 func cmdBuildFile(srcFile string) ([]string, string, error) {
 	file := filenameNoExt(srcFile)
 	dir := filepath.Dir(srcFile)
@@ -113,6 +134,7 @@ func cmdBuildFile(srcFile string) ([]string, string, error) {
 	}
 	cmd = newCmd
 	cmd = append(cmd, "-I"+config.filesSrcDir+dir)
+	cmd = append(cmd, "-I"+config.linuxHeadersDir+dir)
 	cmd = append(cmd, "-I"+config.kernelSrcDir+dir)
 
 	return cmd, extraCmd, err
@@ -132,7 +154,8 @@ func buildFile(srcFile, compileFile, outFile string) error {
 
 	cmd, extraCmd, err := cmdBuildFile(srcFile)
 	if err != nil {
-		return nil
+		LOG_ERR(err, "Failed to get command to build %s", srcFile)
+		return err
 	}
 
 	currentPath, err := os.Getwd()
@@ -154,12 +177,18 @@ func buildFile(srcFile, compileFile, outFile string) error {
 	cmd = append(cmd, cmdPrefixMap(config.kernelSrcDir+"./", "")...)
 	cmd = append(cmd, cmdPrefixMap(config.filesSrcDir, "")...)
 	cmd = append(cmd, cmdPrefixMap(config.filesSrcDir+"./", "")...)
+	cmd = append(cmd, cmdPrefixMap(config.linuxHeadersDir, "")...)
+	cmd = append(cmd, cmdPrefixMap(config.linuxHeadersDir+"./", "")...)
 	cmd = append(cmd, "-o", outFile, compileFile)
 
 	execCmd := exec.Command("bash", "-c", strings.Join(cmd, " ")) // FIXME:Do not use a bash
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
-	execCmd.Dir = config.linuxHeadersDir
+	if config.isModule && findPathForFileFromCmdFile(config.buildDir, "arch/x86/include/generated/uapi/asm/types.h") != "" {
+		execCmd.Dir = config.buildDir
+	} else {
+		execCmd.Dir = config.linuxHeadersDir
+	}
 	err = execCmd.Run()
 
 	if err != nil {

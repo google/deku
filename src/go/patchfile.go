@@ -23,8 +23,13 @@ func extractPatch(patchFilePath string) error {
 				return err
 			}
 
-			if err := copyFile(config.kernelSrcDir+file, config.filesSrcDir+file); err != nil {
-				LOG_ERR(err, "Failed to copy file %s", config.kernelSrcDir+file)
+			srcFile := config.kernelSrcDir + file
+			if config.isModule {
+				srcFile = config.buildDir + file
+			}
+
+			if err := copyFile(srcFile, config.filesSrcDir+file); err != nil {
+				LOG_ERR(err, "Failed to copy file %s", srcFile)
 				return err
 			}
 		}

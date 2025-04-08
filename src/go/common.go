@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 var config Config
@@ -161,6 +162,39 @@ func filenameNoExt(path string) string {
 	return base[:len(base)-len(ext)]
 }
 
+func getBuildTime() (time.Time, error) {
+	var buildTime time.Time
+	if config.isModule {
+		file, err := os.Stat(config.buildDir + "modules.order")
+		if err != nil {
+			LOG_ERR(err, "Can't find modules.order file")
+			return time.Time{}, err
+		}
+		buildTime = file.ModTime()
+	} else {
+		// find representative file to get the kernel build time
+		// vmlinux might not be the best chose as it's not regenerated on every build
+		file, err := os.Stat(config.buildDir + "vmlinux")
+		if err != nil {
+			LOG_ERR(err, "Can't find vmlinux file")
+			return time.Time{}, err
+		}
+		buildTime = file.ModTime()
+
+		file, err = os.Stat(config.buildDir + "Makefile")
+		if err != nil {
+			LOG_ERR(err, "Can't find Makefile file")
+			return time.Time{}, err
+		}
+
+		if file.ModTime().After(buildTime) {
+			buildTime = file.ModTime()
+		}
+	}
+
+	return buildTime, nil
+}
+
 /**
  * Find sources files that were changed after the kernel was built
  */
@@ -170,23 +204,9 @@ func modifiedFiles() []string {
 		"arch/x86/boot/cpustr.h",
 		"arch/x86/boot/zoffset.h"}
 
-	// find representative file to get the kernel build time
-	// vmlinux might not be the best chose as it's not regenerated on every build
-	file, err := os.Stat(config.buildDir + "vmlinux")
+	buildTime, err := getBuildTime()
 	if err != nil {
-		LOG_ERR(err, "Can't find vmlinux file")
 		return nil
-	}
-	startBuildTime := file.ModTime()
-
-	file, err = os.Stat(config.buildDir + "Makefile")
-	if err != nil {
-		LOG_ERR(err, "Can't find Makefile file")
-		return nil
-	}
-
-	if file.ModTime().After(startBuildTime) {
-		startBuildTime = file.ModTime()
 	}
 
 	files := []string{}
@@ -201,11 +221,11 @@ func modifiedFiles() []string {
 
 		path = path[len(config.filesSrcDir):]
 
-		if startBuildTime.After(info.ModTime()) {
+		if buildTime.After(info.ModTime()) {
 			return nil
 		}
 
-		if !strings.Contains(path, "/") {
+		if !strings.Contains(path, "/") && !config.isModule {
 			return nil
 		}
 
@@ -219,6 +239,10 @@ func modifiedFiles() []string {
 			strings.HasPrefix(path, "tar-install/") ||
 			strings.HasPrefix(path, "usr/include/") ||
 			strings.HasPrefix(path, "Documentation/") {
+			return nil
+		}
+
+		if strings.HasSuffix(path, ".mod.c") {
 			return nil
 		}
 
@@ -292,9 +316,10 @@ func generateSymbols(koFile string) bool {
 	LOG_DEBUG("Generate symbols for: %s", koFile)
 
 	// Check if the module is enabled in the kernel configuration.
-	modules, err := os.ReadFile(filepath.Join(config.modulesDir, path, "modules.order"))
+	modOrders := filepath.Join(config.buildDir, path, "modules.order")
+	modules, err := os.ReadFile(modOrders)
 	if err != nil {
-		LOG_DEBUG("Can't find modules.order file")
+		LOG_DEBUG("File %s does not exist. Skip", modOrders)
 		return false
 	}
 	if !bytes.Contains(modules, []byte(koFile)) {
@@ -307,7 +332,7 @@ func generateSymbols(koFile string) bool {
 		return false
 	}
 
-	path = filepath.Join(config.modulesDir, koFile)
+	path = filepath.Join(config.buildDir, koFile)
 	readelfCmd := exec.Command("readelf",
 		"--symbols",
 		"--wide",
@@ -448,7 +473,7 @@ out:
 func getKernelInformation(info string) string {
 	var result = ""
 	re := regexp.MustCompile(`.*` + info + ` "(.+)"\n.*`)
-	filepath.Walk(config.buildDir+"/include/generated/", func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(config.linuxHeadersDir+"/include/generated/", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -484,7 +509,7 @@ func getKernelReleaseVersion() string {
 }
 
 func getKernelConfigHash() string {
-	file, err := os.Open(filepath.Join(config.buildDir, ".config"))
+	file, err := os.Open(filepath.Join(config.linuxHeadersDir, ".config"))
 	if err != nil {
 		LOG_ERR(err, "Can't read .config file")
 		return ""

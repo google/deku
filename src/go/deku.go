@@ -68,8 +68,8 @@ func prepareConfig() int {
 	var init Init
 	cfg, lastArgIndex, err := init.init()
 	if err != nil {
-		LOG_ERR(err, "")
-		os.Exit(1)
+		LOG_ERR(err, "Error")
+		os.Exit(errorStrToCode(err))
 	}
 
 	config = cfg
@@ -117,7 +117,7 @@ func prepareConfig() int {
 func printUsage() {
 	text :=
 		`Usage:
-./deku -b <PATH_TO_KERNEL_BUILD_DIR> --target <USER@DUT_ADDRESS[:PORT]> [COMMAND]
+./deku -b <PATH_TO_BUILD_DIR> --target <USER@DUT_ADDRESS[:PORT]> [COMMAND]
 
 Commands list:
     deploy [default]                      deploy the changes to the device. This command requires
@@ -132,11 +132,15 @@ Commands list:
                                           by this parameter
 
 Available parameters:
-    -b, --builddir                        path to kernel build directory
-    -s, --sourcesdir                      path to kernel sources directory. Use this parameter if
-                                          DEKU can't find kernel sources dir
-    -p, --patch                           patch file from witch generate livepatch module or apply
-                                          changes on the device
+    -b, --builddir                        path to kernel or out-of-tree module build directory
+    -k, --headersdir                      path to the kernel headers directory for the out-of-tree
+                                          module in case the DEKU can't find the kernel headers.
+                                          This is the same parameter as the -C parameter for the
+                                          "make" command in the Makefile.
+    -s, --sourcesdir                      path to the kernel source directory. Use this parameter if
+                                          DEKU can't find the kernel sources directory
+    -p, --patch                           patch file from which to generate livepatch module or
+                                          apply changes to the device
     --target=<USER@DUT_ADDRESS[:PORT]>    SSH connection parameter to the target device. The given
                                           user must be able to load and unload kernel modules. The
                                           SSH must be configured to use key-based authentication.

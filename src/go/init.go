@@ -10,7 +10,9 @@ import (
 	"errors"
 	"hash/crc32"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -29,7 +31,7 @@ func (init *Init) getParam(long, short string) string {
 		value = val
 	}
 
-	var directories = []string{"builddir", "sourcesdir", "src_inst_dir", "workdir", "cros_sdk"}
+	var directories = []string{"builddir", "sourcesdir", "headersdir", "src_inst_dir", "workdir", "cros_sdk"}
 	if slicesContains(directories, long) && len(value) > 0 {
 		if !filepath.IsAbs(value) {
 			if strings.HasPrefix(value, "~/") {
@@ -117,6 +119,7 @@ func (init *Init) getConfig() (Config, int) {
 	var config Config
 	config.buildDir = init.getParam("builddir", "b")
 	config.kernelSrcDir = init.getParam("sourcesdir", "s")
+	config.linuxHeadersDir = init.getParam("headersdir", "k")
 	config.deployType = init.getParam("deploytype", "d")
 	config.sshOptions = init.getParam("ssh_options", "")
 	config.kernSrcInstallDir = init.getParam("src_inst_dir", "")
@@ -138,8 +141,7 @@ func (init *Init) getConfig() (Config, int) {
 	return config, lastArgIndex
 }
 
-func (init *Init) isKernelSourcesDir(path string) bool {
-	var files = []string{"Kbuild", "Kconfig", "Makefile"}
+func (init *Init) filesExist(path string, files []string) bool {
 	for _, file := range files {
 		if !fileExists(path + file) {
 			return false
@@ -147,42 +149,94 @@ func (init *Init) isKernelSourcesDir(path string) bool {
 	}
 
 	return true
+}
+
+func (init *Init) isKernelSourcesDir(path string) bool {
+	return init.filesExist(path, []string{"Kbuild", "Kconfig", "Makefile"})
 }
 
 func (init *Init) isKernelBuildDir(path string) bool {
-	var files = []string{"vmlinux", "System.map", "Makefile", ".config", "include/generated/uapi/linux/version.h"}
-	for _, file := range files {
-		if !fileExists(path + file) {
-			return false
+	return init.isLinuxHeadersDir(path) && init.filesExist(path, []string{"vmlinux", "System.map"})
+}
+
+func (init *Init) isModuleBuildDir(path string) bool {
+	return init.filesExist(path, []string{"Module.symvers", "modules.order", "Makefile"})
+}
+
+func (init *Init) isModuleSourcesDir(path string) bool {
+	return init.filesExist(path, []string{"Makefile"})
+}
+
+func (init *Init) isLinuxHeadersDir(path string) bool {
+	return init.filesExist(path, []string{"Makefile", "Module.symvers", "include/generated/uapi/linux/version.h"})
+}
+
+func (init *Init) findKernelHeaders(path string) string {
+
+	// try to find from ".o.cmd" file
+	dir := findPathForFileFromCmdFile(path, "arch/x86/include/generated/uapi/asm/types.h")
+	if fileExists(dir) {
+		return dir
+	}
+
+	// try to find in the Makefile
+	for _, line := range readLines(path + "Makefile") {
+		if (strings.Contains(line, "make") || strings.Contains(line, "$(MAKE)")) && strings.Contains(line, " -C ") && strings.HasSuffix(line, "modules") {
+			re := regexp.MustCompile(`(?i)-C\s+("[^"]+"|'[^']+'|(?:[^\s$]+|\$\([^)]*\))+([^\s]*)*)`)
+			match := re.FindStringSubmatch(line)
+			if match != nil {
+				path := strings.Trim(match[1], "\"'")
+				if fileExists(path) {
+					return path + "/"
+				}
+				if strings.Contains(path, "$(shell ") {
+					path = strings.ReplaceAll(path, "$(shell ", "$(")
+				}
+				out, _ := exec.Command("bash", "-c", "echo -n "+path).Output()
+				path = string(out)
+				if fileExists(path) {
+					return path + "/"
+				}
+				break
+			} else {
+				LOG_DEBUG("Can't parse 'make' command to build the module (%s)", line)
+			}
+			break
 		}
 	}
 
-	return true
+	return ""
 }
 
-func (init *Init) checkConfigEnabled(linuxHeadersDir, flag string) bool {
+func (init *Init) checkConfigEnabled(linuxHeadersDir, flag, symbolName string) bool {
+	// since 5.15 it can be check with: fileExists("include/config/" + flag)
 	config, err := os.ReadFile(linuxHeadersDir + ".config")
 	if err != nil {
-		LOG_ERR(err, "Failed to read config file: %s", linuxHeadersDir+".config")
-		return false
+		if symbolName == "" {
+			LOG_ERR(err, "Failed to read config file: %s", linuxHeadersDir+".config")
+			return false
+		} else {
+			LOG_DEBUG("Failed to read config file: %s", linuxHeadersDir+".config")
+			modSymVers, err := os.ReadFile(linuxHeadersDir + "Module.symvers")
+			if err != nil {
+				LOG_ERR(err, "Failed to read Module.symvers file: %s", linuxHeadersDir+"Module.symvers")
+				return false
+			}
+
+			return bytes.Contains(modSymVers, []byte(symbolName))
+		}
 	}
 
 	return bytes.Contains(config, []byte(flag+"=y"))
 }
 
 func (init *Init) isKlpEnabled(linuxHeadersDir string) bool {
-	if !init.checkConfigEnabled(linuxHeadersDir, "CONFIG_LIVEPATCH") {
+	if !init.checkConfigEnabled(linuxHeadersDir, "CONFIG_LIVEPATCH", "klp_enable_patch") {
 		LOG_DEBUG("CONFIG_LIVEPATCH is not enabled")
 		return false
 	}
 
-	systemMap, err := os.ReadFile(linuxHeadersDir + "System.map")
-	if err != nil {
-		LOG_ERR(err, "Failed to read System.map file: %s", linuxHeadersDir+"System.map")
-		return false
-	}
-
-	return bytes.Contains(systemMap, []byte("klp_enable_patch"))
+	return true
 }
 
 func populateCrosWorkdir(workdir string) {
@@ -194,6 +248,43 @@ func populateCrosWorkdir(workdir string) {
 	copyFile(GCLIENT_ROOT+"/src/third_party/chromiumos-overlay/chromeos-base/chromeos-ssh-testkeys/files/testing_rsa",
 		workdir+"/testing_rsa")
 	os.Chmod(workdir+"/testing_rsa", 0400)
+}
+
+func (init *Init) checkBuildDir(config *Config) error {
+	if init.isKernelBuildDir(config.buildDir) {
+		config.isModule = false
+	} else if init.isModuleBuildDir(config.buildDir) {
+		config.isModule = true
+		modules, err := filepath.Glob(filepath.Join(
+			config.buildDir,
+			"*.ko"))
+		if err != nil || len(modules) == 0 {
+			LOG_ERR(nil, "Given module directory does not contain built kernel module: %s", config.buildDir)
+			return mkError(ERROR_INVALID_MOD_DIR)
+		}
+
+		if config.linuxHeadersDir == "" {
+			config.linuxHeadersDir = init.findKernelHeaders(config.buildDir)
+			if config.linuxHeadersDir == "" {
+				LOG_ERR(nil, "Failed to find kernel headers directory. Please specify it using -k or --headersdir parameter. This is the same parameter as the -C parameter for the `make` command in the Makefile.")
+				return mkError(ERROR_INVALID_HEADERS_DIR)
+			}
+		}
+	} else if init.isKernelSourcesDir(config.buildDir) {
+		LOG_ERR(nil, "Given build directory is a kernel source directory, not a build directory: %s", config.buildDir)
+		return mkError(ERROR_INVALID_BUILDDIR)
+	} else if init.isModuleSourcesDir(config.buildDir) {
+		LOG_ERR(nil, "Given build directory is a module source directory, not a build directory: %s", config.buildDir)
+		return mkError(ERROR_INVALID_MOD_DIR)
+	} else if init.isLinuxHeadersDir(config.buildDir) {
+		LOG_ERR(nil, "Given build directory is a linux headers directory, not a build directory: %s", config.buildDir)
+		return mkError(ERROR_INVALID_BUILDDIR)
+	} else {
+		LOG_ERR(nil, "Given build directory is not a valid kernel or module build directory: %s", config.buildDir)
+		return mkError(ERROR_INVALID_BUILDDIR)
+	}
+
+	return nil
 }
 
 func (init *Init) checkConfigForCros(config *Config) error {
@@ -267,17 +358,23 @@ func (init *Init) checkConfigForCros(config *Config) error {
 		return errors.New("ERROR_BOARD_NOT_EXISTS")
 	}
 
-	if config.buildDir != "" {
-		LOG_ERR(nil, "-b|--builddir parameter can not be used for Chromebook kernel")
-		return errors.New("ERROR_INVALID_PARAMETERS")
-	}
-
 	kernDir, err := CrosKernelName(baseDir, *config)
 	if err != nil {
 		return err
 	}
 
-	config.buildDir = filepath.Join(baseDir, "/build/", config.crosBoard, "/var/cache/portage/sys-kernel", kernDir) + "/"
+	if config.buildDir != "" {
+		if err := init.checkBuildDir(config); err != nil {
+			return err
+		}
+
+		if !config.isModule {
+			LOG_ERR(nil, "-b|--builddir parameter can not be used for Chromebook kernel")
+			return mkError(ERROR_INVALID_PARAMETERS)
+		}
+	} else {
+		config.buildDir = filepath.Join(baseDir, "/build/", config.crosBoard, "/var/cache/portage/sys-kernel", kernDir) + "/"
+	}
 
 	if config.kernSrcInstallDir == "" {
 		srcPath := filepath.Join(baseDir, "/build/", config.crosBoard, "/usr/src/"+kernDir+"-9999") + "/"
@@ -310,15 +407,23 @@ func (init *Init) checkConfig(config *Config) error {
 	}
 
 	if config.buildDir == "" {
-		LOG_ERR(os.ErrInvalid, "Please specify the kernel build directory using -b or --builddir parameter")
-		return errors.New("ERROR_NO_BUILDDIR")
+		LOG_ERR(os.ErrInvalid, "Please specify the kernel or module build directory using -b or --builddir parameter")
+		return mkError(ERROR_NO_BUILDDIR)
+	} else if !fileExists(config.buildDir) {
+		LOG_ERR(nil, "Given build directory does not exist: %s", config.buildDir)
+		return mkError(ERROR_INVALID_BUILDDIR)
+	} else {
+		err := init.checkBuildDir(config)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.workdir == "" {
 		path, err := os.Executable()
 		if err != nil {
 			LOG_ERR(err, "Fail to get current executable path")
-			return errors.New("ERROR_UNKNOWN")
+			return mkError(ERROR_UNKNOWN)
 		}
 
 		hasher := crc32.NewIEEE()
@@ -335,49 +440,49 @@ func (init *Init) checkConfig(config *Config) error {
 			config.kernelSrcDir = config.buildDir
 		}
 	} else if !init.isKernelSourcesDir(config.kernelSrcDir) {
-		LOG_ERR(nil, `Given source directory is not a valid kernel source directory: "%s"`, config.kernelSrcDir)
-		return errors.New("ERROR_INVALID_KERN_SRC_DIR")
+		LOG_ERR(nil, "Given source directory is not a valid kernel source directory: %s", config.kernelSrcDir)
+		return mkError(ERROR_INVALID_KERN_SRC_DIR)
 	}
 
-	LOG_DEBUG("Kernel source dir: %s", config.kernelSrcDir)
-	LOG_DEBUG("Kernel build dir: %s", config.buildDir)
-	LOG_DEBUG("Workdir: %s", config.workdir)
+	if config.linuxHeadersDir != "" {
+		if !init.isLinuxHeadersDir(config.linuxHeadersDir) {
+			LOG_ERR(nil, "Given headers directory is not a valid linux headers directory: %s", config.linuxHeadersDir)
+			return mkError(ERROR_INVALID_HEADERS_DIR)
+		}
+	} else {
+		config.linuxHeadersDir = config.buildDir
+	}
+
+	if !init.isKlpEnabled(config.linuxHeadersDir) {
+		if config.crosBoard != "" {
+			LOG_ERR(nil, `Your kernel must be build with: USE="livepatch kernel_sources" emerge-%s chromeos-kernel-...`, config.crosBoard)
+			return mkError(ERROR_INSUFFICIENT_BUILD_PARAMS)
+		} else {
+			LOG_ERR(nil, "Kernel livepatching is not enabled. Please enable CONFIG_LIVEPATCH flag and rebuild the kernel")
+			return mkError(ERROR_KLP_IS_NOT_ENABLED)
+		}
+	}
 
 	if err := os.MkdirAll(config.workdir, 0755); err != nil {
 		LOG_ERR(err, "Failed to create directory %s", config.workdir)
 		return err
 	}
 
-	if !init.isKernelBuildDir(config.buildDir) {
-		LOG_ERR(nil, `Given directory is not a valid kernel build directory: "%s"`, config.buildDir)
-		return errors.New("ERROR_INVALID_BUILDDIR")
-	}
-
-	if !init.isKlpEnabled(config.buildDir) {
-		if config.crosBoard != "" {
-			LOG_ERR(nil, `Your kernel must be build with: USE="livepatch kernel_sources" emerge-%s chromeos-kernel-...`, config.crosBoard)
-			return errors.New("ERROR_INSUFFICIENT_BUILD_PARAMS")
-		} else {
-			LOG_ERR(nil, "Kernel livepatching is not enabled. Please enable CONFIG_LIVEPATCH flag and rebuild the kernel")
-			return errors.New("ERROR_KLP_IS_NOT_ENABLED")
-		}
-	}
-
-	if init.checkConfigEnabled(config.buildDir, "CONFIG_CC_IS_CLANG") {
+	if init.checkConfigEnabled(config.linuxHeadersDir, "CONFIG_CC_IS_CLANG", "") {
 		config.useLLVM = "LLVM=1"
 	}
 
-	config.isAARCH64 = init.checkConfigEnabled(config.buildDir, "CONFIG_ARM64")
+	config.isAARCH64 = init.checkConfigEnabled(config.linuxHeadersDir, "CONFIG_ARM64", "")
 
 	if len(config.patches) > 0 {
 		config.filesSrcDir = config.workdir + PATCHED_SOURCES_DIR + "/"
 	} else {
-		config.filesSrcDir = config.kernelSrcDir
+		if config.isModule {
+			config.filesSrcDir = config.buildDir
+		} else {
+			config.filesSrcDir = config.kernelSrcDir
+		}
 	}
-
-	config.linuxHeadersDir = config.buildDir
-	config.modulesDir = config.buildDir
-	config.systemMap = config.buildDir + "System.map"
 
 	return nil
 }
@@ -426,6 +531,7 @@ func debugPrintConfig(config *Config) {
 	LOG_DEBUG("ignoreCross: %v", config.ignoreCross)
 	LOG_DEBUG("isAARCH64: %v", config.isAARCH64)
 	LOG_DEBUG("isCros: %v", config.isCros)
+	LOG_DEBUG("isModule: %v", config.isModule)
 	if config.kernSrcInstallDir != "" {
 		LOG_DEBUG("kernSrcInstallDir: %s", config.kernSrcInstallDir)
 	}
@@ -435,9 +541,6 @@ func debugPrintConfig(config *Config) {
 	if config.linuxHeadersDir != "" {
 		LOG_DEBUG("linuxHeadersDir: %s", config.linuxHeadersDir)
 	}
-	if config.modulesDir != "" {
-		LOG_DEBUG("modulesDir: %s", config.modulesDir)
-	}
 	if config.kernelSrcDir != "" {
 		LOG_DEBUG("kernelSrcDir: %s", config.kernelSrcDir)
 	}
@@ -446,9 +549,6 @@ func debugPrintConfig(config *Config) {
 	}
 	if config.sshOptions != "" {
 		LOG_DEBUG("sshOptions: %s", config.sshOptions)
-	}
-	if config.systemMap != "" {
-		LOG_DEBUG("systemMap: %s", config.systemMap)
 	}
 	if config.useLLVM != "" {
 		LOG_DEBUG("useLLVM: %s", config.useLLVM)

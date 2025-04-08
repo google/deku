@@ -57,7 +57,11 @@ func invalidatePatch(patch dekuPatch) dekuPatch {
 func generatePatchId(srcFile string) (string, error) {
 	path := config.filesSrcDir + srcFile
 	if !fileExists(path) {
-		path = config.kernelSrcDir + srcFile
+		if config.isModule {
+			path = config.buildDir + srcFile
+		} else {
+			path = config.kernelSrcDir + srcFile
+		}
 	}
 
 	file, err := os.Open(path)
@@ -451,6 +455,7 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 	}
 
 	originObjectFile := config.buildDir + filepath.Dir(file) + "/" + fileName + ".o"
+
 	if LOG_LEVEL <= 1 {
 		copyFile(originObjectFile, patchDir+"/_"+fileName+".o")
 	}
@@ -462,7 +467,7 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 		return invalidatePatch(patch), err
 	}
 
-	adjustAmbiguousSymbols(originObjectFile, outFile)
+	err = adjustAmbiguousSymbols(originObjectFile, outFile)
 	if err != nil {
 		LOG_ERR(err, "Error while adjust ambiguous symbols %s", file)
 		return invalidatePatch(patch), err

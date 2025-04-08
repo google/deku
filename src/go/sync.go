@@ -87,15 +87,19 @@ func generateModulesFilesList() error {
 		if baseFile, found = strings.CutSuffix(koFile, ".ko"); !found {
 			baseFile = strings.TrimSuffix(baseFile, ".o")
 		}
+		baseFile = strings.TrimPrefix(baseFile, config.buildDir)
 
-		contents, err := os.ReadFile(filepath.Join(config.buildDir, baseFile+".mod"))
+		modFile := filepath.Join(config.buildDir, baseFile+".mod")
+		contents, err := os.ReadFile(modFile)
 		if err != nil {
-			LOG_DEBUG("Can't read .mod file: %s", err)
+			LOG_DEBUG("Can't read .mod file: %s. Skip", modFile)
 			continue
 		}
 
 		for _, file := range strings.Fields(string(contents)) {
 			srcFile := strings.TrimSuffix(file, ".o") + ".c"
+			srcFile = strings.TrimPrefix(srcFile, "./")
+			srcFile = strings.TrimPrefix(srcFile, config.buildDir)
 			_, err = outFile.WriteString(srcFile + " " + baseFile + "\n")
 			if err != nil {
 				return err

@@ -120,6 +120,15 @@ const (
 
 	// Function is not traceable
 	ERROR_NOT_TRACEABLE = 46
+
+	// Given out-of-tree kernel module directory is invalid
+	ERROR_INVALID_MOD_DIR = 47
+
+	// Error code for invalid kernel source directory
+	ERROR_INVALID_KERNEL_SRC_DIR = 48
+
+	// Error code for invalid kernel headers directory
+	ERROR_INVALID_HEADERS_DIR = 49
 )
 
 func errorStrToCode(err error) int {
@@ -198,6 +207,14 @@ func errorStrToCode(err error) int {
 		return ERROR_PERMISSION_DENIED
 	case "ERROR_UPLOAD_FILES":
 		return ERROR_UPLOAD_FILES
+	case "ERROR_NOT_TRACEABLE":
+		return ERROR_NOT_TRACEABLE
+	case "ERROR_INVALID_MOD_DIR":
+		return ERROR_INVALID_MOD_DIR
+	case "ERROR_INVALID_KERNEL_SRC_DIR":
+		return ERROR_INVALID_KERNEL_SRC_DIR
+	case "ERROR_INVALID_HEADERS_DIR":
+		return ERROR_INVALID_HEADERS_DIR
 	default:
 		return ERROR_UNKNOWN
 	}
@@ -280,6 +297,14 @@ func mkError(errCode int) error {
 		str = "ERROR_PERMISSION_DENIED"
 	case ERROR_UPLOAD_FILES:
 		str = "ERROR_UPLOAD_FILES"
+	case ERROR_NOT_TRACEABLE:
+		str = "ERROR_NOT_TRACEABLE"
+	case ERROR_INVALID_MOD_DIR:
+		str = "ERROR_INVALID_MOD_DIR"
+	case ERROR_INVALID_KERNEL_SRC_DIR:
+		str = "ERROR_INVALID_KERNEL_SRC_DIR"
+	case ERROR_INVALID_HEADERS_DIR:
+		str = "ERROR_INVALID_HEADERS_DIR"
 	}
 
 	return errors.New(str)
