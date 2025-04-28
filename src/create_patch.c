@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "disassembler.h"
@@ -449,9 +450,6 @@ static int copiedSymbolsRelocFilter(Context *ctx, Elf_Data *data, size_t index,
 		strcmp(".static_call_sites", secName) == 0)
 		index = (index / 2) * 2;
 
-	if (strcmp(".altinstr_aux", secName) == 0)
-		index = (index / 3) * 3 + 1;
-
 	if (strcmp("__jump_table", secName) == 0)
 		index = (index / 3) * 3;
 
@@ -708,67 +706,6 @@ static Elf_Scn *copySectionWithRel(Context *ctx, Elf64_Section index,
 		return NULL;
 	}
 
-	// trim section data if it's contains only zeros to size depends on how many relocations are present for specific sections
-	int dataSize = 0;
-	const char *secName = getSectionName(ctx->elf, index);
-	if (strcmp(secName, "__jump_table") == 0)
-		dataSize = /*sizeof(struct jump_entry)*/ 16 * relaCount / 3;
-	else if (strcmp(secName, ".return_sites") == 0)
-		dataSize = relaCount * 4;
-	else if (strcmp(secName, ".static_call_sites") == 0)
-		dataSize = relaCount * 4;
-
-	Elf_Data *data = elf_getdata(newScn, NULL);
-	if (dataSize > 0 && dataSize != data->d_size)
-	{
-		bool allZero = true;
-		for (int i = 0; i < data->d_size && allZero; i++)
-			allZero = ((uint8_t *)data->d_buf)[i] == 0;
-
-		if (allZero)
-		{
-			GElf_Shdr shdr;
-			if (gelf_getshdr(newScn, &shdr) == NULL)
-				return NULL;
-
-			data->d_size = shdr.sh_size = dataSize;
-			if (gelf_update_shdr(newScn, &shdr) == 0)
-				return NULL;
-
-			// update offsets
-			GElf_Rela rela;
-			index = elf_ndxscn(newScn);
-			if (index == SHN_UNDEF)
-				return NULL;
-
-			relScn = getRelForSectionIndex(ctx->secondElf, index);
-			Elf_Data *relData = elf_getdata(relScn, NULL);
-			if (relData == NULL)
-				return NULL;
-
-			for (size_t i = 0; i < relaCount; i++)
-			{
-				if (gelf_getrela(relData, i, &rela) == NULL)
-					return NULL;
-
-				if (strcmp(secName, "__jump_table") == 0)
-					rela.r_offset = (i / 3 * 4 + i % 3) * 4; // get sequence: 0x0, 0x4, 0x8, 0x10, 0x14, 0x18, 0x20, ...
-				else if (strcmp(secName, ".return_sites") == 0)
-					rela.r_offset = i * 4;
-				else if (strcmp(secName, ".static_call_sites") == 0)
-					rela.r_offset = i * 4;
-				else
-				{
-					LOG_ERR("Offset for relocations for %s section is not defined", secName);
-					return NULL;
-				}
-
-				if (gelf_update_rela(relData, i, &rela) == 0)
-					return NULL;
-			}
-		}
-	}
-
 	return newScn;
 }
 
@@ -817,11 +754,11 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 	int ret = -1;
 	bool *symToCopy = calloc(sizeof(bool), ctx->symbolsCount);
 	if (!CHECK_ALLOC(symToCopy))
-		goto err;
+		GOTO_ERR;
 
 	int res = markSymbolsToCopy(ctx, symToCopy, symbols);
 	if (res != 0)
-		goto err;
+		GOTO_ERR;
 
 	// copy symbols
 	for (size_t i = 0; i < ctx->symbolsCount; i++)
@@ -830,7 +767,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 			continue;
 
 		if (copySymbol(ctx, i, true) == (size_t)-1)
-			goto err;
+			GOTO_ERR;
 	}
 
 	for (size_t i = 0; i < ctx->symbolsCount; i++)
@@ -842,7 +779,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 		if (invalidSym(sym))
 		{
 			LOG_ERR("Cant find symbol with index: %zu", i);
-			goto err;
+			GOTO_ERR;
 		}
 
 		Elf_Scn *relScn = getRelForSectionIndex(ctx->elf, sym.st_shndx);
@@ -850,19 +787,19 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 		{
 			size_t indexFrom = elf_ndxscn(relScn);
 			if (indexFrom == SHN_UNDEF)
-				goto err;
+				GOTO_ERR;
 
 			Elf_Scn *copiedScn = ctx->copiedScnMap[sym.st_shndx];
 			if (copiedScn == NULL)
-				goto err;
+				GOTO_ERR;
 
 			size_t indexTo = elf_ndxscn(copiedScn);
 			if (indexTo == SHN_UNDEF)
-				goto err;
+				GOTO_ERR;
 
 			res = copyRelSection(ctx, indexFrom, indexTo, &sym, NULL);
 			if (res < 0)
-				goto err;
+				GOTO_ERR;
 		}
 	}
 
@@ -870,7 +807,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 	while ((relScn = elf_nextscn(ctx->elf, relScn)) != NULL)
 	{
 		if (gelf_getshdr(relScn, &shdr) == NULL)
-			goto err;
+			GOTO_ERR;
 
 		if (shdr.sh_type != SHT_RELA)
 			continue;
@@ -881,7 +818,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 
 		size_t index = elf_ndxscn(relScn);
 		if (index == SHN_UNDEF)
-			goto err;
+			GOTO_ERR;
 
 		const Elf_Scn *copiedRelScn = ctx->copiedScnMap[index];
 		if (copiedRelScn)
@@ -890,7 +827,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 		// at this moment copy only relocations for .rodata
 		const char *secName = getSectionName(ctx->elf, shdr.sh_info);
 		if (secName == NULL)
-			goto err;
+			GOTO_ERR;
 
 		if (strstr(secName, ".rodata") != secName)
 			continue;
@@ -902,10 +839,10 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 
 		size_t indexTo = elf_ndxscn(copiedScn);
 		if (indexTo == SHN_UNDEF)
-			goto err;
+			GOTO_ERR;
 
 		if (copyRelSection(ctx, index, indexTo, &mockSym, copiedSymbolsRelocFilter) < 0)
-			goto err;
+			GOTO_ERR;
 	}
 
 	/**
@@ -916,7 +853,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 	".orc_unwind_ip", ".initcall4.init", ".meminit.text", "__tracepoints"
 	*/
 	const char *extraSections[] = {".altinstructions",
-								   /*".altinstr_aux",*/
+								   ".altinstr_aux",
 								   ".altinstr_replacement",
 								   "__bug_table",
 								   "__jump_table",
@@ -933,19 +870,22 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 			if (scn == NULL)
 			{
 				LOG_ERR("Can't copy %s section", extraSections[i]);
-				goto err;
+				GOTO_ERR;
 			}
+
+			if (strcmp(extraSections[i], ".altinstr_replacement") == 0)
+				continue;
 
 			size_t index = elf_ndxscn(scn);
 			if (index == SHN_UNDEF)
-				goto err;
+				GOTO_ERR;
 
 			relScn = getRelForSectionIndex(ctx->secondElf, index);
 			if (relScn == NULL)
 				continue;
 
 			if (gelf_getshdr(relScn, &shdr) == NULL)
-				goto err;
+				GOTO_ERR;
 
 			size_t cnt = shdr.sh_size / shdr.sh_entsize;
 			if (cnt == 0)
@@ -957,11 +897,11 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 				data->d_size = 0;
 
 				if (gelf_getshdr(scn, &shdr) == NULL)
-					goto err;
+					GOTO_ERR;
 
 				shdr.sh_size = 0;
 				if (gelf_update_shdr(scn, &shdr) == 0)
-					goto err;
+					GOTO_ERR;
 			}
 		}
 	}
@@ -972,11 +912,11 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 		LOG_DEBUG("Copy %s section", "__tracepoint_str");
 		size_t index = elf_ndxscn(scn);
 		if (index == SHN_UNDEF)
-			goto err;
+			GOTO_ERR;
 
 		scn = copySectionWithRel(ctx, index, NULL, NULL);
 		if (scn == NULL)
-			goto err;
+			GOTO_ERR;
 
 		// copy all symbols that points to the __tracepoint_str section
 		for (size_t i = 0; i < ctx->symbolsCount; i++)
@@ -985,18 +925,12 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 				continue;
 
 			if (copySymbol(ctx, i, true) == (size_t)-1)
-				goto err;
+				GOTO_ERR;
 		}
 	}
 
 	if (sortSymtab(ctx->secondElf) == -1)
-		goto err;
-
-	if (elf_update(ctx->secondElf, ELF_C_WRITE) == -1)
-	{
-		LOG_ERR("Can't update ELF file '%s': %s", filePath, elf_errmsg(-1));
-		goto err;
-	}
+		GOTO_ERR;
 
 	ret = 0;
 
@@ -1014,15 +948,15 @@ static Elf *createNewElf(const char *outFile, Elf64_Half arch, int *fd)
 {
 	*fd = open(outFile, O_RDWR|O_TRUNC|O_CREAT, 0666);
 	if (*fd == -1)
-		goto err;
+		GOTO_ERR;
 
 	Elf *elf = elf_begin(*fd, ELF_C_WRITE, 0);
 	if (elf == NULL)
-		goto err;
+		GOTO_ERR;
 
 	Elf64_Ehdr *ehdr = elf64_newehdr(elf);
 	if (ehdr == NULL)
-		goto err;
+		GOTO_ERR;
 
 	ehdr->e_ident[EI_MAG0] = ELFMAG0;
 	ehdr->e_ident[EI_MAG1] = ELFMAG1;
@@ -1039,88 +973,88 @@ static Elf *createNewElf(const char *outFile, Elf64_Half arch, int *fd)
 	GElf_Shdr shdr;
 	Elf_Scn *strtabScn = elf_newscn(elf);
 	if (strtabScn == NULL)
-		goto err;
+		GOTO_ERR;
 
 	Elf_Data *newData = elf_newdata(strtabScn);
 	if (newData == NULL)
-		goto err;
+		GOTO_ERR;
 
 	if (gelf_getshdr(strtabScn, &shdr) == NULL)
-		goto err;
+		GOTO_ERR;
 
 	static uint8_t blank[1] = {'\0'};
 	newData->d_buf = blank;
 	newData->d_size = 1;
 	Elf64_Word strtabName = appendString(&shdr, newData, ".strtab");
 	if (strtabName == -1)
-		goto err;
+		GOTO_ERR;
 
 	Elf64_Word symtabName = appendString(&shdr, newData, ".symtab");
 	if (symtabName == -1)
-		goto err;
+		GOTO_ERR;
 
 	shdr.sh_type = SHT_STRTAB;
 	Elf64_Word shstrtabName = appendString(&shdr, newData, ".shstrtab");
 	if (shstrtabName == -1)
-		goto err;
+		GOTO_ERR;
 
 	shdr.sh_name = shstrtabName;
 	if (gelf_update_shdr(strtabScn, &shdr) == 0)
-		goto err;
+		GOTO_ERR;
 
 	Elf_Scn *shstrtabScn = elf_newscn(elf);
 	if (shstrtabScn == NULL)
-		goto err;
+		GOTO_ERR;
 
 	newData = elf_newdata(shstrtabScn);
 	if (newData == NULL)
-		goto err;
+		GOTO_ERR;
 
 	newData->d_buf = blank;
 	newData->d_size = 1;
 	if (gelf_getshdr(shstrtabScn, &shdr) == NULL)
-		goto err;
+		GOTO_ERR;
 
 	shdr.sh_size = 1;
 	shdr.sh_type = SHT_STRTAB;
 	shdr.sh_name = strtabName;
 	if (gelf_update_shdr(shstrtabScn, &shdr) == 0)
-		goto err;
+		GOTO_ERR;
 
 	Elf_Scn *symtabScn = elf_newscn(elf);
 	if (symtabScn == NULL)
-		goto err;
+		GOTO_ERR;
 
 	newData = elf_newdata(symtabScn);
 	if (newData == NULL)
-		goto err;
+		GOTO_ERR;
 
 	if (gelf_getshdr(symtabScn, &shdr) == NULL)
-		goto err;
+		GOTO_ERR;
 
 	GElf_Sym emptySym = {0};
 	newData->d_type = ELF_T_SYM;
 	newData->d_buf = malloc(sizeof(GElf_Sym));
 	if (!CHECK_ALLOC(newData->d_buf))
-		goto err;
+		GOTO_ERR;
 
 	memcpy(newData->d_buf, &emptySym, sizeof(GElf_Sym));
 	newData->d_size = sizeof(GElf_Sym);
 
 	Elf_Scn *scn = getSectionByName(elf, ".strtab");
 	if (scn == NULL)
-		goto err;
+		GOTO_ERR;
 
 	shdr.sh_link = elf_ndxscn(scn);
 	if (shdr.sh_link == SHN_UNDEF)
-		goto err;
+		GOTO_ERR;
 
 	shdr.sh_size = sizeof(GElf_Sym);
 	shdr.sh_type = SHT_SYMTAB;
 	shdr.sh_name = symtabName;
 	shdr.sh_entsize = sizeof(GElf_Sym);
 	if (gelf_update_shdr(symtabScn, &shdr) == 0)
-		goto err;
+		GOTO_ERR;
 
 	return elf;
 
@@ -1133,6 +1067,309 @@ err:
 		*fd = -1;
 	}
 	return NULL;
+}
+
+/*
+ * @return Size of entity. On error return -1
+ */
+static int findEntitySize(Elf *elf, const char *sectionName, int relocPerEntity)
+{
+	GElf_Shdr shdr;
+	Elf_Scn *sec = getSectionByName(elf, sectionName);
+	if (sec == NULL)
+		return 0;
+
+	if (gelf_getshdr(sec, &shdr) == NULL)
+		GOTO_ERR;
+
+	if (shdr.sh_size == 0)
+		return 0;
+
+	int entSize = shdr.sh_size;
+	if (entSize == 0)
+		return 0;
+
+	Elf_Scn *relScn = getRelForSectionIndex(elf, elf_ndxscn(sec));
+	if (relScn == NULL)
+		return 0;
+
+	if (gelf_getshdr(relScn, &shdr) == NULL)
+		GOTO_ERR;
+
+	entSize /= shdr.sh_size / shdr.sh_entsize / relocPerEntity;
+
+	return entSize;
+
+err:
+	return -1;
+}
+
+/*
+ * @return 0 on success, otherwise non-zero
+ */
+static int getRelocOffsets(Elf *elf, const char *sectionName, int relocPerEntity,
+						   int *offsets)
+{
+	GElf_Shdr shdr;
+	GElf_Rela rela;
+	Elf_Scn *sec = getSectionByName(elf, sectionName);
+	if (sec == NULL)
+		return 0;
+
+	if (gelf_getshdr(sec, &shdr) == NULL)
+		GOTO_ERR;
+
+	if (shdr.sh_size == 0)
+		GOTO_ERR;
+
+	Elf_Scn *relScn = getRelForSectionIndex(elf, elf_ndxscn(sec));
+	if (relScn == NULL)
+		return 0;
+
+	Elf_Data *relData = elf_getdata(relScn, NULL);
+	if (relData == NULL)
+		GOTO_ERR;
+
+	if (gelf_getshdr(relScn, &shdr) == NULL)
+		GOTO_ERR;
+
+	size_t cnt = shdr.sh_size / shdr.sh_entsize;
+	if (cnt == 0)
+		return 0;
+
+	if (cnt < relocPerEntity)
+		GOTO_ERR;
+
+	for (size_t i = 0; i < relocPerEntity; i++)
+	{
+		if (gelf_getrela(relData, i, &rela) == NULL)
+			GOTO_ERR;
+
+		offsets[i] = rela.r_offset;
+	}
+
+	return 0;
+
+err:
+	return -1;
+}
+
+/*
+ * Trim section data to fit relocations.
+ * @param ctx Context
+ * @param sectionName Section name to trim
+ * @param relocPerEntity Number of relocations per one entity represented by section
+ * Eg: for __jump_table there are 3 relocations per entity, since one jump table
+ * entry is represented by 3 relocations (one for the code, one for the target,
+ * and one for the key struct field).
+ * @return 0 on success, otherwise non-zero
+ */
+static int trimSectionData(Context *ctx, const char *sectionName, int relocPerEntity)
+{
+	GElf_Shdr shdr;
+	GElf_Rela rela;
+	int *offsets = alloca(relocPerEntity * sizeof(int));
+	if (offsets == NULL)
+		GOTO_ERR;
+
+	int res = getRelocOffsets(ctx->elf, sectionName, relocPerEntity, offsets);
+	if (res != 0)
+		GOTO_ERR;
+
+	size_t entSize = findEntitySize(ctx->elf, sectionName, relocPerEntity);
+
+	if (entSize == -1)
+		GOTO_ERR;
+	else if (entSize == 0)
+		return 0;
+
+	Elf_Scn *sec = getSectionByName(ctx->secondElf, sectionName);
+	if (sec == NULL)
+		return 0;
+
+	Elf_Data *secData = elf_getdata(sec, NULL);
+	if (secData == NULL)
+		GOTO_ERR;
+
+	int index = elf_ndxscn(sec);
+	if (index == SHN_UNDEF)
+		GOTO_ERR;
+
+	Elf_Scn *relScn = getRelForSectionIndex(ctx->secondElf, index);
+	Elf_Data *relData = elf_getdata(relScn, NULL);
+	if (relData == NULL)
+		GOTO_ERR;
+
+	if (gelf_getshdr(relScn, &shdr) == NULL)
+		GOTO_ERR;
+
+	size_t cnt = shdr.sh_size / shdr.sh_entsize;
+	if (cnt == 0)
+		return 0;
+
+	for (size_t i = 0; i < cnt; i++)
+	{
+		if (gelf_getrela(relData, i, &rela) == NULL)
+			GOTO_ERR;
+
+		int newOffset = (i / relocPerEntity) * entSize + offsets[i % relocPerEntity];
+		int size = offsets[(i + 1) % relocPerEntity] - offsets[i % relocPerEntity];
+		if ((i + 1) % relocPerEntity == 0)
+			size = entSize - offsets[i % relocPerEntity];
+		memcpy((uint8_t *)secData->d_buf + newOffset, secData->d_buf + rela.r_offset, size);
+		rela.r_offset = newOffset;
+		if (gelf_update_rela(relData, i, &rela) == 0)
+			GOTO_ERR;
+	}
+
+	if (gelf_getshdr(sec, &shdr) == NULL)
+		GOTO_ERR;
+
+	secData->d_size = secData->d_size = cnt / relocPerEntity * entSize;
+	if (gelf_update_shdr(sec, &shdr) == 0)
+		GOTO_ERR;
+
+	return 0;
+
+err:
+	return -1;
+}
+
+/*
+ * @return 0 on success, otherwise non-zero
+ */
+int trimSectionsData(Context *ctx)
+{
+	int ret = 0;
+
+	ret = trimSectionData(ctx, "__jump_table", 3);
+	if (ret != 0)
+		return ret;
+
+	ret = trimSectionData(ctx, ".altinstructions", 2);
+	if (ret != 0)
+		return ret;
+
+	ret = trimSectionData(ctx, ".static_call_sites", 2);
+	if (ret != 0)
+		return ret;
+
+	ret = trimSectionData(ctx, "__bug_table", 2);
+	if (ret != 0)
+		return ret;
+
+	ret = trimSectionData(ctx, ".return_sites", 1);
+	if (ret != 0)
+		return ret;
+
+	return ret;
+}
+
+int compareSymbolPos(const void *a, const void *b)
+{
+	return ((*(Symbol **)a)->sym.st_value - (*(Symbol **)b)->sym.st_value);
+}
+
+/*
+ * @return 0 on success, otherwise non-zero
+ */
+static int clearInvalidFunctions(Context *ctx)
+{
+#define X86_BYTES_NOP1 0x90
+#define AARCH64_BYTES_NOP 0x1F, 0x20, 0x03, 0xD5
+	static const unsigned char aarch64nops[] = {AARCH64_BYTES_NOP};
+	char **sectionName, *sectionNames[] = {".text", ".noinstr.text", NULL};
+	Symbol **listOfValidFunctions = NULL;
+    sectionName = sectionNames;
+
+	while (*sectionName != NULL)
+	{
+		Elf_Scn *originScn = getSectionByName(ctx->elf, *sectionName);
+		if (originScn == NULL)
+		{
+			sectionName++;
+			continue;
+		}
+
+		Elf_Scn *scn = getSectionByName(ctx->secondElf, *sectionName);
+		if (scn == NULL)
+		{
+			sectionName++;
+			continue;
+		}
+
+		Elf_Data *data = elf_getdata(scn, NULL);
+		if (data == NULL)
+			GOTO_ERR;
+
+		listOfValidFunctions = (Symbol **)calloc(ctx->symbolsCount, sizeof(Symbol *));
+		int idx = 0;
+		for (size_t i = 0; i < ctx->symbolsCount; i++)
+		{
+			listOfValidFunctions[i] = NULL;
+			if (!ctx->symbols[i]->copiedWithSection || !ctx->symbols[i]->isFun)
+				continue;
+
+			GElf_Sym sym = getSymbolByIndex(ctx->elf, ctx->symbols[i]->index);
+			if (invalidSym(sym))
+				GOTO_ERR;
+
+			if (sym.st_shndx != elf_ndxscn(originScn))
+				continue;
+
+			listOfValidFunctions[idx++] = ctx->symbols[i];
+		}
+		qsort(listOfValidFunctions, idx, sizeof(Symbol *), compareSymbolPos);
+
+		int prevFuncEnd = 0;
+		for (size_t i = 0; i < ctx->symbolsCount; i++)
+		{
+			if (listOfValidFunctions[i] == NULL)
+				break;
+
+			Symbol *symbol = listOfValidFunctions[i];
+			GElf_Sym sym = symbol->sym;
+
+			if (isAARCH64(ctx->secondElf))
+			{
+				for (int j = prevFuncEnd; j < sym.st_value; j += sizeof(aarch64nops))
+					memcpy((uint8_t *)data->d_buf + j, aarch64nops, sizeof(aarch64nops));
+			}
+			else
+			{
+				memset((uint8_t *)data->d_buf + prevFuncEnd, X86_BYTES_NOP1, sym.st_value - prevFuncEnd);
+			}
+
+			prevFuncEnd = sym.st_value + sym.st_size;
+		}
+
+		int endOfSec = data->d_size;
+		if (endOfSec < prevFuncEnd)
+		{
+			LOG_ERR("Invalid function end: %d < %d", endOfSec, prevFuncEnd);
+			GOTO_ERR;
+		}
+
+		if (isAARCH64(ctx->secondElf))
+		{
+			for (int j = prevFuncEnd; j < endOfSec; j += sizeof(aarch64nops))
+				memcpy((uint8_t *)data->d_buf + j, aarch64nops, sizeof(aarch64nops));
+		}
+		else
+		{
+			memset((uint8_t *)data->d_buf + prevFuncEnd, X86_BYTES_NOP1, endOfSec - prevFuncEnd);
+		}
+
+		free(listOfValidFunctions);
+		listOfValidFunctions = NULL;
+		sectionName++;
+	}
+
+	return 0;
+
+err:
+	free(listOfValidFunctions);
+	return -1;
 }
 
 /*
@@ -1172,6 +1409,20 @@ int extractSymbols(const char *filePath, const char *outFile, const char *symToC
 	res = copySymbols(&ctx, filePath, symToCopy);
 	if (res != 0)
 		goto err;
+
+	res = trimSectionsData(&ctx);
+	if (res != 0)
+		goto err;
+
+	res = clearInvalidFunctions(&ctx);
+	if (res != 0)
+		goto err;
+
+	if (elf_update(ctx.secondElf, ELF_C_WRITE) == -1)
+	{
+		LOG_ERR("Can't update ELF file '%s': %s", filePath, elf_errmsg(-1));
+		goto err;
+	}
 
 	res = 0;
 

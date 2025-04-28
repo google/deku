@@ -34,6 +34,8 @@
 #define REALLOC_ELF_DBUF(ptr, size, add)	\
 	({void *tmp = malloc(size + add); CHECK_ALLOC(tmp); memcpy(tmp, ptr, size); tmp;})
 
+#define GOTO_ERR do { LOG_INFO("Error in %s:%d", __func__, __LINE__); goto err; } while (0)
+
 extern GElf_Shdr InvalidShdr;
 extern GElf_Sym InvalidSym;
 #define invalidSym(sym) (sym.st_name == -1)

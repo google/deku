@@ -100,57 +100,70 @@ static uint32_t crc32(uint8_t *data, uint32_t len)
 	return crc;
 }
 
+void removeAllStrOccurrences(char *str, const char *sub)
+{
+	char *p;
+	size_t len = strlen(sub);
+
+	while ((p = strstr(str, sub)))
+		memmove(p, p + len, strlen(p + len) + 1);
+}
+
 /*
  * @return Hash of relocation symbol. On error return 0
  */
 static uint32_t calcRelSymHash(Elf *elf, const GElf_Sym *sym)
 {
+	char *str = NULL;
 	uint32_t crc = 0;
 	GElf_Rela rela;
 	GElf_Shdr shdr;
 	Elf_Scn *scn = getSectionByName(elf, ".symtab");
 	if (scn == NULL)
-		goto err;
+		GOTO_ERR;
 
 	if (gelf_getshdr(scn, &shdr) == NULL)
-		goto err;
+		GOTO_ERR;
 
 	Elf64_Word symtabLink = shdr.sh_link;
 
 	scn = getRelForSectionIndex(elf, sym->st_shndx);
 	if (scn == NULL)
-		goto err;
+		GOTO_ERR;
 
 	Elf_Data *data = elf_getdata(scn, NULL);
 	if (data == NULL)
-		goto err;
+		GOTO_ERR;
 
 	if (gelf_getshdr(scn, &shdr) == NULL)
-		goto err;
+		GOTO_ERR;
 
 	size_t cnt = shdr.sh_size / shdr.sh_entsize;
 	for (size_t i = 0; i < cnt; i++)
 	{
 		if (gelf_getrela(data, i, &rela) == NULL)
-			goto err;
+			GOTO_ERR;
 
 		if (rela.r_offset < sym->st_value || rela.r_offset > sym->st_value + sym->st_size)
 			continue;
 
-		char *name = "";
 		GElf_Sym rsym = getSymbolByIndex(elf, ELF64_R_SYM(rela.r_info));
 		if (invalidSym(rsym))
-			goto err;
+			GOTO_ERR;
 
 		if (ELF64_ST_TYPE(rsym.st_info) != STT_SECTION)
 		{
-			name = elf_strptr(elf, symtabLink, rsym.st_name);
+			str = elf_strptr(elf, symtabLink, rsym.st_name);
+			if (str)
+				str = strdup(str);
+			if (str == NULL)
+				GOTO_ERR;
 		}
 		else
 		{
 			shdr = getSectionHeader(elf, rsym.st_shndx);
 			if (invalidShdr(shdr))
-				goto err;
+				GOTO_ERR;
 
 			const char *secName = getSectionName(elf, rsym.st_shndx);
 
@@ -158,19 +171,31 @@ static uint32_t calcRelSymHash(Elf *elf, const GElf_Sym *sym)
 			{
 				scn = elf_getscn(elf, rsym.st_shndx);
 				if (scn == NULL)
-					goto err;
+					GOTO_ERR;
 
 				Elf_Data *data = elf_getdata(scn, NULL);
 				if (data == NULL)
-					goto err;
+					GOTO_ERR;
 
 				if (gelf_getshdr(scn, &shdr) == NULL)
-					goto err;
+					GOTO_ERR;
 
 				if (strstr(secName, ".rodata.cst") == secName)
-					name = "";
+				{
+					str = strdup("");
+					if (str == NULL)
+						GOTO_ERR;
+				}
 				else if ((Elf64_Sxword)shdr.sh_size > rela.r_addend)
-					name = (char *)data->d_buf + rela.r_addend;
+				{
+					str = (char *)data->d_buf + rela.r_addend;
+					if (str)
+						str = strdup(str);
+					if (str == NULL)
+						GOTO_ERR;
+
+					removeAllStrOccurrences(str, "./");
+				}
 			}
 			else
 			{
@@ -192,19 +217,28 @@ static uint32_t calcRelSymHash(Elf *elf, const GElf_Sym *sym)
 					}
 				}
 
-				name = elf_strptr(elf, symtabLink, rsym.st_name);
+				str = elf_strptr(elf, symtabLink, rsym.st_name);
+				if (str)
+				{
+					str = strdup(str);
+					if (str == NULL)
+						GOTO_ERR;
+				}
 			}
 		}
-		if (name == NULL)
+		if (str == NULL)
 			continue;
 
 		crc += rela.r_offset - sym->st_value;
-		crc += crc32((uint8_t *)name, strlen(name));
+		crc += crc32((uint8_t *)str, strlen(str));
+		free(str);
+		str = NULL;
 	}
 
 	return crc;
 
 err:
+	free(str);
 	return 0;
 }
 

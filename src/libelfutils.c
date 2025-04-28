@@ -131,8 +131,9 @@ Symbol **readSymbols(Elf *elf, size_t *count)
 		syms[i]->sym.st_shndx = sym.st_shndx;
 		// is function
 		if ((sym.st_info == ELF64_ST_INFO(STB_GLOBAL, STT_FUNC) ||
-			 (sym.st_info == ELF64_ST_INFO(STB_LOCAL, STT_FUNC))) &&
-			strlen(syms[i]->name) > 0)
+			 (sym.st_info == ELF64_ST_INFO(STB_LOCAL, STT_FUNC)) ||
+			 (sym.st_info == ELF64_ST_INFO(STB_WEAK, STT_FUNC))) &&
+			strlen(syms[i]->name) > 0 && sym.st_size > 0)
 		{
 			syms[i]->isFun = true;
 		}
