@@ -47,6 +47,9 @@ const (
 	// Hash from kernel config hash
 	KERNEL_CONFIG_HASH = "configHash"
 
+	// Kernel build dir path
+	KERNEL_BUILD_DIR = "buildDir"
+
 	// Commands script dir
 	COMMANDS_DIR = "command"
 
@@ -84,14 +87,18 @@ const (
 )
 
 type Config struct {
+	androidKernelDir  string
+	androidModulesDir string
 	buildDir          string
-	crosBoard         string
+	board             string
 	crosPath          string
 	deployParams      string
 	deployType        string
+	dstPath           string
 	filesSrcDir       string
 	ignoreCross       bool
 	isAARCH64         bool
+	isAndroid         bool
 	isCros            bool
 	isModule          bool
 	kernSrcInstallDir string
@@ -100,6 +107,6 @@ type Config struct {
 	linuxHeadersDir   string
 	patches           []string
 	sshOptions        string
-	useLLVM           string
+	llvm              string
 	workdir           string
 }

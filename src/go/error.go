@@ -13,17 +13,11 @@ const (
 	// Unknown error
 	ERROR_UNKNOWN = 5
 
-	// Kernel and module are not synced
-	ERROR_NOT_SYNCED = 10
-
 	// Kernel livepatch is not enabled
 	ERROR_KLP_IS_NOT_ENABLED = 11
 
 	// Invalid kernel source directory
 	ERROR_INVALID_KERN_SRC_DIR = 12
-
-	// No deploy type
-	ERROR_NO_DEPLOY_TYPE = 13
 
 	// No deploy parameters
 	ERROR_NO_DEPLOY_PARAMS = 14
@@ -46,35 +40,20 @@ const (
 	// Failed to find symbol
 	ERROR_CANT_FIND_SYMBOL = 20
 
-	// No working directory
-	ERROR_NO_WORKDIR = 21
-
 	// Failed to generate livepatch module
 	ERROR_GENERATE_LIVEPATCH_MODULE = 22
 
 	// Failed to build module
 	ERROR_BUILD_MODULE = 23
 
-	// Not support cold function
-	ERROR_NO_SUPPORT_COLD_FUN = 24
-
 	// Forbidden modify
 	ERROR_FORBIDDEN_MODIFY = 25
-
-	// Not support multi function
-	ERROR_NO_SUPPORT_MULTI_FUNC = 26
 
 	// Failed to extract symbols
 	ERROR_EXTRACT_SYMBOLS = 27
 
 	// Unsupported changes
 	ERROR_UNSUPPORTED_CHANGES = 28
-
-	// Change call to origin
-	ERROR_CHANGE_CALL_TO_ORIGIN = 29
-
-	// Unsupported read mostly
-	ERROR_UNSUPPORTED_READ_MOSTLY = 30
 
 	// Unsupported ref sym from module
 	ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE = 31
@@ -88,9 +67,6 @@ const (
 	// Invalid kernel on device
 	ERROR_INVALID_KERNEL_ON_DEVICE = 34
 
-	// Working directory exists
-	ERROR_WORKDIR_EXISTS = 35
-
 	// Board not exists
 	ERROR_BOARD_NOT_EXISTS = 36
 
@@ -102,9 +78,6 @@ const (
 
 	// Invalid build directory
 	ERROR_INVALID_BUILDDIR = 39
-
-	// Build directory in crossdk
-	ERROR_BUILDDIR_IN_CROSSDK = 40
 
 	// Failed to find object file
 	ERROR_CANT_FIND_OBJ = 41
@@ -129,6 +102,15 @@ const (
 
 	// Error code for invalid kernel headers directory
 	ERROR_INVALID_HEADERS_DIR = 49
+
+	// Error code for invalid android kernel directory
+	ERROR_INVALID_ANDROID_KERNEL_DIR = 50
+
+	// Can't connect to the device
+	ERROR_CANT_CONNECT_DEVICE = 51
+
+	// Failed to execute command on the device
+	ERROR_EXECUTE_COMMAND_ON_DEVICE = 52
 )
 
 func errorStrToCode(err error) int {
@@ -137,14 +119,10 @@ func errorStrToCode(err error) int {
 		return NO_ERROR
 	case "ERROR_UNKNOWN":
 		return ERROR_UNKNOWN
-	case "ERROR_NOT_SYNCED":
-		return ERROR_NOT_SYNCED
 	case "ERROR_KLP_IS_NOT_ENABLED":
 		return ERROR_KLP_IS_NOT_ENABLED
 	case "ERROR_INVALID_KERN_SRC_DIR":
 		return ERROR_INVALID_KERN_SRC_DIR
-	case "ERROR_NO_DEPLOY_TYPE":
-		return ERROR_NO_DEPLOY_TYPE
 	case "ERROR_NO_DEPLOY_PARAMS":
 		return ERROR_NO_DEPLOY_PARAMS
 	case "ERROR_INVALID_DEPLOY_TYPE":
@@ -159,26 +137,16 @@ func errorStrToCode(err error) int {
 		return ERROR_CANT_FIND_SYM_INDEX
 	case "ERROR_CANT_FIND_SYMBOL":
 		return ERROR_CANT_FIND_SYMBOL
-	case "ERROR_NO_WORKDIR":
-		return ERROR_NO_WORKDIR
 	case "ERROR_GENERATE_LIVEPATCH_MODULE":
 		return ERROR_GENERATE_LIVEPATCH_MODULE
 	case "ERROR_BUILD_MODULE":
 		return ERROR_BUILD_MODULE
-	case "ERROR_NO_SUPPORT_COLD_FUN":
-		return ERROR_NO_SUPPORT_COLD_FUN
 	case "ERROR_FORBIDDEN_MODIFY":
 		return ERROR_FORBIDDEN_MODIFY
-	case "ERROR_NO_SUPPORT_MULTI_FUNC":
-		return ERROR_NO_SUPPORT_MULTI_FUNC
 	case "ERROR_EXTRACT_SYMBOLS":
 		return ERROR_EXTRACT_SYMBOLS
 	case "ERROR_UNSUPPORTED_CHANGES":
 		return ERROR_UNSUPPORTED_CHANGES
-	case "ERROR_CHANGE_CALL_TO_ORIGIN":
-		return ERROR_CHANGE_CALL_TO_ORIGIN
-	case "ERROR_UNSUPPORTED_READ_MOSTLY":
-		return ERROR_UNSUPPORTED_READ_MOSTLY
 	case "ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE":
 		return ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE
 	case "ERROR_NO_BOARD_PARAM":
@@ -187,8 +155,6 @@ func errorStrToCode(err error) int {
 		return ERROR_INSUFFICIENT_BUILD_PARAMS
 	case "ERROR_INVALID_KERNEL_ON_DEVICE":
 		return ERROR_INVALID_KERNEL_ON_DEVICE
-	case "ERROR_WORKDIR_EXISTS":
-		return ERROR_WORKDIR_EXISTS
 	case "ERROR_BOARD_NOT_EXISTS":
 		return ERROR_BOARD_NOT_EXISTS
 	case "ERROR_INVALID_PARAMETERS":
@@ -197,8 +163,6 @@ func errorStrToCode(err error) int {
 		return ERROR_NO_BUILDDIR
 	case "ERROR_INVALID_BUILDDIR":
 		return ERROR_INVALID_BUILDDIR
-	case "ERROR_BUILDDIR_IN_CROSSDK":
-		return ERROR_BUILDDIR_IN_CROSSDK
 	case "ERROR_CANT_FIND_OBJ":
 		return ERROR_CANT_FIND_OBJ
 	case "ERROR_DEPEND_MODULE_NOT_LOADED":
@@ -215,6 +179,12 @@ func errorStrToCode(err error) int {
 		return ERROR_INVALID_KERNEL_SRC_DIR
 	case "ERROR_INVALID_HEADERS_DIR":
 		return ERROR_INVALID_HEADERS_DIR
+	case "ERROR_INVALID_ANDROID_KERNEL_DIR":
+		return ERROR_INVALID_ANDROID_KERNEL_DIR
+	case "ERROR_CANT_CONNECT_DEVICE":
+		return ERROR_CANT_CONNECT_DEVICE
+	case "ERROR_EXECUTE_COMMAND_ON_DEVICE":
+		return ERROR_EXECUTE_COMMAND_ON_DEVICE
 	default:
 		return ERROR_UNKNOWN
 	}
@@ -227,14 +197,10 @@ func mkError(errCode int) error {
 		str = "NO_ERROR"
 	case ERROR_UNKNOWN:
 		str = "ERROR_UNKNOWN"
-	case ERROR_NOT_SYNCED:
-		str = "ERROR_NOT_SYNCED"
 	case ERROR_KLP_IS_NOT_ENABLED:
 		str = "ERROR_KLP_IS_NOT_ENABLED"
 	case ERROR_INVALID_KERN_SRC_DIR:
 		str = "ERROR_INVALID_KERN_SRC_DIR"
-	case ERROR_NO_DEPLOY_TYPE:
-		str = "ERROR_NO_DEPLOY_TYPE"
 	case ERROR_NO_DEPLOY_PARAMS:
 		str = "ERROR_NO_DEPLOY_PARAMS"
 	case ERROR_INVALID_DEPLOY_TYPE:
@@ -249,26 +215,16 @@ func mkError(errCode int) error {
 		str = "ERROR_CANT_FIND_SYM_INDEX"
 	case ERROR_CANT_FIND_SYMBOL:
 		str = "ERROR_CANT_FIND_SYMBOL"
-	case ERROR_NO_WORKDIR:
-		str = "ERROR_NO_WORKDIR"
 	case ERROR_GENERATE_LIVEPATCH_MODULE:
 		str = "ERROR_GENERATE_LIVEPATCH_MODULE"
 	case ERROR_BUILD_MODULE:
 		str = "ERROR_BUILD_MODULE"
-	case ERROR_NO_SUPPORT_COLD_FUN:
-		str = "ERROR_NO_SUPPORT_COLD_FUN"
 	case ERROR_FORBIDDEN_MODIFY:
 		str = "ERROR_FORBIDDEN_MODIFY"
-	case ERROR_NO_SUPPORT_MULTI_FUNC:
-		str = "ERROR_NO_SUPPORT_MULTI_FUNC"
 	case ERROR_EXTRACT_SYMBOLS:
 		str = "ERROR_EXTRACT_SYMBOLS"
 	case ERROR_UNSUPPORTED_CHANGES:
 		str = "ERROR_UNSUPPORTED_CHANGES"
-	case ERROR_CHANGE_CALL_TO_ORIGIN:
-		str = "ERROR_CHANGE_CALL_TO_ORIGIN"
-	case ERROR_UNSUPPORTED_READ_MOSTLY:
-		str = "ERROR_UNSUPPORTED_READ_MOSTLY"
 	case ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE:
 		str = "ERROR_UNSUPPORTED_REF_SYM_FROM_MODULE"
 	case ERROR_NO_BOARD_PARAM:
@@ -277,8 +233,6 @@ func mkError(errCode int) error {
 		str = "ERROR_INSUFFICIENT_BUILD_PARAMS"
 	case ERROR_INVALID_KERNEL_ON_DEVICE:
 		str = "ERROR_INVALID_KERNEL_ON_DEVICE"
-	case ERROR_WORKDIR_EXISTS:
-		str = "ERROR_WORKDIR_EXISTS"
 	case ERROR_BOARD_NOT_EXISTS:
 		str = "ERROR_BOARD_NOT_EXISTS"
 	case ERROR_INVALID_PARAMETERS:
@@ -287,8 +241,6 @@ func mkError(errCode int) error {
 		str = "ERROR_NO_BUILDDIR"
 	case ERROR_INVALID_BUILDDIR:
 		str = "ERROR_INVALID_BUILDDIR"
-	case ERROR_BUILDDIR_IN_CROSSDK:
-		str = "ERROR_BUILDDIR_IN_CROSSDK"
 	case ERROR_CANT_FIND_OBJ:
 		str = "ERROR_CANT_FIND_OBJ"
 	case ERROR_DEPEND_MODULE_NOT_LOADED:
@@ -305,6 +257,12 @@ func mkError(errCode int) error {
 		str = "ERROR_INVALID_KERNEL_SRC_DIR"
 	case ERROR_INVALID_HEADERS_DIR:
 		str = "ERROR_INVALID_HEADERS_DIR"
+	case ERROR_INVALID_ANDROID_KERNEL_DIR:
+		str = "ERROR_INVALID_ANDROID_KERNEL_DIR"
+	case ERROR_CANT_CONNECT_DEVICE:
+		str = "ERROR_CANT_CONNECT_DEVICE"
+	case ERROR_EXECUTE_COMMAND_ON_DEVICE:
+		str = "ERROR_EXECUTE_COMMAND_ON_DEVICE"
 	}
 
 	return errors.New(str)
