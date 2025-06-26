@@ -34,6 +34,10 @@ checkOotModule()
 		linuxHeaders="-k $buildDir"
 	fi
 
+	logStep "Cleanup..."
+	dekuDeploy
+	remoteSh "rmmod test_module.ko 2>/dev/null || sudo rmmod test_module.ko 2>/dev/null"
+
 	logStep "Build and load module..."
 	if [[ $VM_TEST ]]; then
 		rm -rf $modDir
@@ -41,22 +45,19 @@ checkOotModule()
 		sed -i '/^\smake -C /d' $modDir/Makefile || exitError
 		sed -i 's/^#\smake -C /\tmake -C /g' $modDir/Makefile || exitError
 		runCmd "bash -c 'cd /home/test/deku/$dekuModDir && make'" || exitError
-		remoteSh "sudo rmmod test_module.ko 2>/dev/null"
 		remoteSh "sudo insmod deku/$dekuModDir/test_module.ko" || exitError
 	elif [[ $CHROMEOS ]]; then
 		make -C $modDir KERNEL_DIR=$buildDir LLVM=1 || exitError
 		copyToRemote "$modDir/test_module.ko"
-		remoteSh "rmmod test_module.ko 2>/dev/null"
 		remoteSh "insmod test_module.ko"
 	else
 		runCmd "make -C $modDir KERNEL_DIR=$buildDir" || exitError
 		copyToRemote "$modDir/test_module.ko" "/tmp/"
-		remoteSh "rmmod test_module.ko 2>/dev/null"
 		remoteSh "insmod /tmp/test_module.ko"
 	fi
 
 	local text=$(remoteShOut "cat /proc/deku_test")
-	# [[ "$text" == "DEKU test procfs. Param value: 0" ]] || exitError
+	[[ "$text" == "DEKU test procfs. Param value: 0" ]] || exitError
 
 	logStep "Modify and apply changes to module..."
 	sed -i "s/DEKU test procfs/DEKU xtest procfs/g" $modDir/module_helper.c
@@ -87,11 +88,11 @@ checkOotModule()
 	appendToFunction $modDir/module_helper.c "helper_print_init_message" "printk(KERN_INFO);"
 	out=$(dekuBuild --stdout --builddir $dekuModDir $linuxHeaders) && exitError 5
 	[[ $? != $ERROR_FORBIDDEN_MODIFY ]] && exitError
-	if [[ $CHROMEOS$VM_TEST ]]; then
-		grep -q "The 'helper_print_init_message' function is not allowed to modify." <<< "$out" || exitError
-	else
-		grep -q "The 'helper_print_init_message' function is forbidden to modify. The function is non-local" <<< "$out" || exitError
-	fi
+	# if [[ $CHROMEOS$VM_TEST ]]; then
+	grep -q "The 'helper_print_init_message' function is not allowed to modify." <<< "$out" || exitError
+	# else
+	# 	grep -q "The 'helper_print_init_message' function is forbidden to modify. The function is non-local" <<< "$out" || exitError
+	# fi
 
 	if [[ $VM_TEST == "" && $KERNEL_VERSION != v6.16* ]]; then
 		logStep "Check if no-valid kernel headers are detected..."

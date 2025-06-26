@@ -12,6 +12,8 @@ DESCRIPTION="Stalled task"
 setCpuOnlineState()
 {
 	local en=$1
+	local sudoCmd=
+	[[ $VM_TEST ]] && sudoCmd="sudo"
 	remoteSh "for i in \$(seq 2 \$(nproc)); do echo $1 | $sudoCmd tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
 }
 
@@ -22,10 +24,8 @@ stalledTaskTest()
 	logStep -n "Check if stalled task is properly detected... "
 	sed -i "s/oom_reap_task(tsk);/{oom_reap_task(tsk);pr_info(\"\");}/g" "$srcDir/mm/oom_kill.c"
 
-	local sudoCmd=
-	[[ $VM_TEST != "" ]] && sudoCmd="sudo"
 	setCpuOnlineState 0
-	out=$(dekuDeploy --stdout) && { setCpuOnlineState 1; logErr "Fail"; exitError 1; }
+	out=$(dekuDeploy --stdout -v) && { setCpuOnlineState 1; logErr "Fail"; exitError 1; }
 	setCpuOnlineState 1
 
 	grep -q "The oom_reaper \[PID: [0-9][0-9]*\] blocks the application of changes" <<< "$out" || { logErr "Fail"; exitError 2; }

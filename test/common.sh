@@ -531,6 +531,49 @@ checkIfFileExists()
 }
 export -f checkIfFileExists
 
+markKernelAsDirty()
+{
+	logInfo "Marking kernel as dirty"
+	rm -f $(buildDir $KERNEL_VERSION)/include/generated/compile.h
+}
+export -f markKernelAsDirty
+
+getModifiedTestFiles()
+{
+	local modifiedSrcFiles=
+	# check if any .c or .h files are modified
+	if [[ $VM_TEST ]]; then
+		modifiedSrcFiles=$(remoteShOut "git -C linux status --porcelain | grep -E '^\s[M] .*\.c$|^\s[M] .*\.h$'")
+	else
+		modifiedSrcFiles=$(git -C $srcDir status --porcelain | grep -E "^\s[M] .*\.c$|^\s[M] .*\.h$")
+	fi
+	local modFiles=
+	for file in $(bash test/tests/$CURRENT_TEST/$CURRENT_TEST.sh --files); do
+		for modFile in $modifiedSrcFiles; do
+			if [[ "$modFile" == "$file" ]]; then
+				modFiles+=" $modFile"
+				break
+			fi
+		done
+	done
+
+	echo $modFiles
+}
+
+isKernelBuildClean()
+{
+	[[ -f $(buildDir $KERNEL_VERSION)/include/generated/compile.h ]] || logInfo "Kernel build is not clean, compile.h is not found"
+	[[ -f $(buildDir $KERNEL_VERSION)/include/generated/compile.h ]] || return 1
+	grep -q "DEKU_TEST_HOST_DIRTY" $(buildDir $KERNEL_VERSION)/include/generated/compile.h && logInfo "Kernel build is dirty, contains DEKU_TEST_HOST_DIRTY"
+	grep -q "DEKU_TEST_HOST_DIRTY" $(buildDir $KERNEL_VERSION)/include/generated/compile.h && return 1
+	local ver=${KERNEL_VERSION//v/}
+	ver=${ver//-rc/.0-rc}
+	grep -q "\"$ver" $(buildDir $KERNEL_VERSION)/include/generated/utsrelease.h || logInfo "Kernel build is not clean, version mismatch"
+	grep -q "\"$ver" $(buildDir $KERNEL_VERSION)/include/generated/utsrelease.h || return 1
+	return 0
+}
+export -f isKernelBuildClean
+
 buildKernelToLaunch()
 {
 	local onlyBuild=
@@ -543,15 +586,41 @@ buildKernelToLaunch()
 	local logFile=$(logFile build)
 	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local buildDir=$(buildDir $KERNEL_VERSION)
+	local modifiedSrcFiles=$(getModifiedTestFiles)
+
+	local exportBuildHost=
 
 	[[ "$TEST_ON_CHROMEBOOK" ]] && return
+
+	[[ $modifiedSrcFiles != "" ]] && exportBuildHost=DEKU_TEST_HOST_DIRTY
+
+	local kernelOnDevice=$(remoteShOut "uname -r")
+	kernelOnDevice=${kernelOnDevice/+/}
+	kernelOnDevice=${kernelOnDevice/-dirty/}
+	# remove "-gff37d9449b65" from kernelOnDevice "6.15.0-rc7-gff37d9449b65"
+	kernelOnDevice=${kernelOnDevice%-*}
+	kernelOnDevice=${kernelOnDevice//.0-rc/-rc}
+	local kernelOnDeviceIsOk=
+	[[ $onlyBuild || v$kernelOnDevice == $KERNEL_VERSION ]] && kernelOnDeviceIsOk=1
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		return
 	elif [[ $CHROMEOS != "" ]]; then
+		local kernelOnDevice=$(remoteShOut "uname -r")
+		kernelOnDevice=${kernelOnDevice%.*}
+		kernelOnDevice=${kernelOnDevice/./_}
+		local kernelOnDeviceIsOk=
+		[[ $onlyBuild || $kernelOnDevice == $CURRENT_CROS_KERNEL_VERSION ]] && kernelOnDeviceIsOk=1
+		if isKernelBuildClean && [[ $modifiedSrcFiles == "" && $buildDir == *"chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION" && -e /build/brya/var/db/pkg/sys-kernel/chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION-9999 && $kernelOnDeviceIsOk == 1 ]]; then
+			[[ $onlyBuild ]] || remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1
+			logInfo "Kernel build artifacts are clean"
+			return
+		fi
 		logInfo "Building the kernel..."
 		remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1 &
+		[[ $modifiedSrcFiles != "" ]] && sed -i "s/KBUILD_BUILD_HOST=chromium.org/KBUILD_BUILD_HOST=DEKU_TEST_HOST_DIRTY/g" /mnt/host/source/src/third_party/chromiumos-overlay/eclass/cros-kernel.eclass
 		USE="pcserial tty_console_ttyS0 livepatch" emerge-${CROS_BOARD} chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION > $logFile 2>&1 || return 1
+		git -C "/mnt/host/source/src/third_party/chromiumos-overlay/" restore eclass/cros-kernel.eclass
 		[[ $onlyBuild ]] && return 0
 		for i in $(seq 1 10); do
 			/mnt/host/source/src/scripts/update_kernel.sh --remote localhost --board=${CROS_BOARD} --clean --ssh_port $CROS_SSH_PORT >> $logFile 2>&1 && break
@@ -559,13 +628,15 @@ buildKernelToLaunch()
 		done
 		return 0
 	elif [[ $VM_TEST != "" ]]; then
-		logInfo "Building the kernel..."
 		# remoteShOut "cp -f /boot/config-\$(uname -r) linux-6.8.4/.config;" >> logFile 2>&1
 		# remoteShOut "make $extraparams -C linux-6.8.4 mrproper" >> $logFile 2>&1
 		# remoteShOut "yes '' | make $extraparams -C linux-6.8.4 oldconfig" >> $logFile 2>&1
+		isKernelBuildClean && [[ $modifiedSrcFiles == "" && $kernelOnDeviceIsOk == 1 ]] && { logInfo "Kernel build artifacts are clean"; return; }
+		logInfo "Building the kernel..."
 		local cmd="
 find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;
-time make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
+export KBUILD_BUILD_HOST=$exportBuildHost;
+make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
 ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
 	>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
 	exit 1;
@@ -581,10 +652,12 @@ sudo ./update_grub.sh test;
 		return
 	fi
 
+	if isKernelBuildClean && [[ $modifiedSrcFiles == "" && $kernelOnDeviceIsOk == 1 ]]; then
+		return
+	fi
+
 	logInfo "Building the kernel..."
-	# rm -f "$buildDir/vmlinux"
-	yes "" | make $extraparams -C "$srcDir" O="$buildDir" oldconfig > $logFile 2>&1
-	docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
+	docker run --env KBUILD_BUILD_HOST=$exportBuildHost -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 }
 export -f buildKernelToLaunch
 
@@ -698,6 +771,8 @@ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
 			# enableKernelConfig DEBUG_INFO
 			# enableKernelConfig GDB_SCRIPTS
 			enableKernelConfig BT --module
+			docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" olddefconfig >/dev/null 2>&1
+			cp -f $(kernelConfigFile) /tmp/deku_test_config.backup
 		fi
 	fi
 
@@ -716,6 +791,13 @@ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
 			logInfo "Enable $cfg"
 			enableKernelConfig $cfg
 		fi
+	done
+
+	for cfg in "$@"
+	do
+		docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" olddefconfig >/dev/null 2>&1
+		markKernelAsDirty
+		break
 	done
 
 }

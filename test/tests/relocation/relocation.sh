@@ -7,7 +7,7 @@
 
 # readelf -s -W vmlinux | grep -A 30  -e "\bhpet.c\b" -e "\birq_handler\b"
 
-FILES="arch/x86/kernel/hpet.c drivers/gpu/drm/i915/gem/i915_gem_mman.c net/ipv4/netfilter/nf_log_ipv4.c"
+FILES="arch/x86/kernel/hpet.c drivers/gpu/drm/i915/gem/i915_gem_mman.c net/ipv4/netfilter/nf_log_ipv4.c net/netfilter/nf_log_syslog.c"
 DESCRIPTION="Relocation"
 KERNEL=$KERNEL_VERSION_5_15
 . test/common.sh

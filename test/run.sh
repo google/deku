@@ -19,6 +19,23 @@ export KERNEL_VERSION="KERNEL_VERSION_NOT_SET"
 declare -A Tests
 bg_pids=()
 
+# ❯ rg "Building the kernel..." *
+tests_that_build_kernel=(
+	"atomic_replace"
+	"dependend_module"
+	"dependent_changes"
+	"detect_object_file"
+	"global_variables"
+	"no_valid_changes"
+	"patch"
+	"static_keys"
+	"static_local_variables"
+	"stalled_task"
+	"string_changed"
+	"symbol_index"
+	"weak_function"
+)
+
 checkErr()
 {
 	local kernelVersion=$1
@@ -172,15 +189,23 @@ function revert()
 
 	local files=$(bash test/tests/$test/$test.sh --files)
 	[[ $files == "" ]] && return
-	# for file in $files; do
+	local validFiles=()
+	for file in $files; do
 		# [[ $VM_TEST != "" ]] && [[ -s "$srcDir/$file" ]] touch -m -t 200001010101 "$srcDir/$file"
-	# done
+		[[ -s "$srcDir/$file" ]] && validFiles+=($srcDir/$file)
+	done
 
 	git -C "$srcDir" restore $(git -C "$srcDir" ls-files $files 2>/dev/null | xargs) || git -C "$srcDir" restore .
 	if [[ $VM_TEST == "" ]]; then
 		echo "$(git -C $srcDir status -s -- ':!debian')" >> $LOG_FILE
 	else
 		remoteSh 'git -C linux status -s -- ':!debian''
+	fi
+
+	if isKernelBuildClean; then
+		touch -m -t 200001010101 ${validFiles[*]}
+		touch "$srcDir/vmlinux"
+		touch "$srcDir/Makefile"
 	fi
 }
 
@@ -218,6 +243,7 @@ function runTests()
 			local testScript=test/tests/$test/$test.sh
 			local desc=$(bash $testScript --description)
 			export TEST_ID=$(testId $kernelVersion $test)
+			export CURRENT_TEST=$test
 			exportVars $kernelVersion
 
 			if grep -q "\b$TEST_ID\b" test/logs/pass_test > /dev/null 2>&1; then
@@ -273,18 +299,16 @@ function runTests()
 				fi
 			fi
 
-			if grep -q "\bbuildKernelToLaunch\b" $testScript; then
-				rebuildKernel=1
-			fi
-			if grep -q "\bprepareKernel\b" $testScript; then
-				rebuildKernel=1
-			fi
-			if grep -q "\bprepareKernelAndDeploy\b" $testScript; then
-				rebuildKernel=1
-			fi
-
+			cp -f $(kernelConfigFile) /tmp/deku_test_config.backup
 			bash $testScript --kernel $kernelVersion
 			res=$?
+			diff --ignore-matching-lines='^#' $(kernelConfigFile) /tmp/deku_test_config.backup >/dev/null && logInfo "Kernel config file is the same"
+			diff --ignore-matching-lines='^#' $(kernelConfigFile) /tmp/deku_test_config.backup >/dev/null || { \
+				logInfo "Kernel config file changed"; \
+				diff --ignore-matching-lines='^#' -y $(kernelConfigFile) /tmp/deku_test_config.backup | grep -e ">" -e "<" -e "|"; \
+				cp -f /tmp/deku_test_config.backup $(kernelConfigFile); \
+				markKernelAsDirty; \
+			}
 			[[ $EXIT_ON_FAILURE == "" ]] && revert $kernelVersion $test
 			checkErr $kernelVersion $res $test "$desc"
 		done
