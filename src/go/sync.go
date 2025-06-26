@@ -73,23 +73,58 @@ func generateVmlinuxFilesList() error {
 	return nil
 }
 
-func generateModulesFilesList() error {
-	outFile, err := os.Create(filepath.Join(config.workdir, MODULES_FILES_LIST))
-	if err != nil {
-		return err
+func findSourceFileForObjectFile(parentDir, objectFile string) string {
+	relOjectFile := strings.TrimPrefix(objectFile, parentDir)
+	file := filepath.Base(relOjectFile)
+	dir := filepath.Dir(relOjectFile)
+	cmdFile := filepath.Join(parentDir, dir, "."+file+".cmd")
+	lines := readLines(cmdFile)
+	if len(lines) == 0 {
+		LOG_WARN("No .cmd file found for %s (%s)", objectFile, cmdFile)
+		return ""
 	}
-	defer outFile.Close()
 
-	modules := readLines(filepath.Join(config.buildDir, "modules.order"))
+	found := false
+	kernelDir := ""
+	for _, line := range lines {
+		if strings.HasSuffix(line, `include/linux/kconfig.h \`) {
+			line = strings.TrimSuffix(line, `include/linux/kconfig.h \`)
+			kernelDir = strings.TrimSpace(line)
+			found = true
+			break
+		}
+	}
+	if !found {
+		LOG_WARN("No kernel directory found in .cmd file for object file %s in directory %s", objectFile, parentDir)
+		return ""
+	}
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "source_"+objectFile) {
+			srcFile := strings.Split(line, " := ")[1]
+			if config.isModule {
+				srcFile = strings.TrimPrefix(srcFile, config.buildDir)
+			} else {
+				srcFile = strings.TrimPrefix(srcFile, kernelDir)
+			}
+			return srcFile
+		}
+	}
+
+	LOG_WARN("No source file found for object file %s in directory %s", objectFile, parentDir)
+	return ""
+}
+
+func generateModulesFilesListFromDir(dir string, outFile *os.File) error {
+	modules := readLines(filepath.Join(dir, "modules.order"))
 	for _, koFile := range modules {
 		var baseFile string
 		var found bool
 		if baseFile, found = strings.CutSuffix(koFile, ".ko"); !found {
 			baseFile = strings.TrimSuffix(baseFile, ".o")
 		}
-		baseFile = strings.TrimPrefix(baseFile, config.buildDir)
-
-		modFile := filepath.Join(config.buildDir, baseFile+".mod")
+		baseFile = strings.TrimPrefix(baseFile, dir)
+		modFile := filepath.Join(dir, baseFile+".mod")
 		contents, err := os.ReadFile(modFile)
 		if err != nil {
 			LOG_DEBUG("Can't read .mod file: %s. Skip", modFile)
@@ -97,10 +132,20 @@ func generateModulesFilesList() error {
 		}
 
 		for _, file := range strings.Fields(string(contents)) {
-			srcFile := strings.TrimSuffix(file, ".o") + ".c"
+			srcFile := strings.TrimSuffix(file, ".o")
 			srcFile = strings.TrimPrefix(srcFile, "./")
-			srcFile = strings.TrimPrefix(srcFile, config.buildDir)
-			_, err = outFile.WriteString(srcFile + " " + baseFile + "\n")
+			srcFile = strings.TrimPrefix(srcFile, dir)
+			if fileExists(filepath.Join(config.kernelSrcDir, srcFile+".c")) {
+				srcFile += ".c"
+			} else if fileExists(filepath.Join(config.kernelSrcDir, srcFile+".rs")) {
+				srcFile += ".rs"
+			} else {
+				srcFile = findSourceFileForObjectFile(dir, file)
+				if srcFile == "" {
+					continue
+				}
+			}
+			_, err = outFile.WriteString(srcFile + " " + file + " " + baseFile + "\n")
 			if err != nil {
 				return err
 			}
@@ -108,6 +153,23 @@ func generateModulesFilesList() error {
 	}
 
 	return nil
+}
+
+func generateModulesFilesList() error {
+	outFile, err := os.Create(filepath.Join(config.workdir, MODULES_FILES_LIST))
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	if config.isAndroid {
+		err := generateModulesFilesListFromDir(config.androidModulesDir, outFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	return generateModulesFilesListFromDir(config.buildDir, outFile)
 }
 
 func synchronize() {
@@ -136,6 +198,7 @@ func synchronize() {
 	workdirCfg[KERNEL_RELEASE] = getKernelReleaseVersion()
 	workdirCfg[KERNEL_CONFIG_HASH] = getKernelConfigHash()
 	workdirCfg[DEKU_HASH] = generateDEKUHash()
+	workdirCfg[KERNEL_BUILD_DIR] = config.buildDir
 	jsonStr, err := json.Marshal(workdirCfg)
 	if err != nil {
 		LOG_ERR(err, "Fail to generate JSON for config file %s", workdirCfg)

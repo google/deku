@@ -12,12 +12,12 @@ import (
 )
 
 func getKernelReleaseOnTarget() (string, error) {
-	out, err := runCommand("uname --kernel-release")
+	out, err := runCommand("uname -r")
 	return out, err
 }
 
 func getKernelVersionOnTarget() (string, error) {
-	out, err := runCommand("uname --kernel-version")
+	out, err := runCommand("uname -v")
 	return out, err
 }
 
@@ -63,17 +63,17 @@ func checkKernels() (bool, error) {
 }
 
 func isRemoteDeploy() bool {
-	return config.deployParams != ""
+	return config.deployParams != "" || config.isAndroid
 }
 
 func deploy() error {
 	if isRemoteDeploy() {
-		if config.deployType == "" || config.deployParams == "" {
+		if config.deployType == "" || (config.deployParams == "" && !config.isAndroid) {
 			LOG_ERR(nil, "Please specify SSH connection parameters to the target device using: --target=<user@host[:port]> parameter")
 			return mkError(ERROR_NO_DEPLOY_PARAMS)
 		}
 
-		if config.deployType != "ssh" {
+		if config.deployType != "ssh" && config.deployType != "adb" {
 			LOG_ERR(nil, "Unknown deploy type '%s'", config.deployType)
 			return mkError(ERROR_INVALID_DEPLOY_TYPE)
 		}
@@ -170,7 +170,7 @@ func runCommand(command string) (string, error) {
 	var err error
 
 	if isRemoteDeploy() {
-		out, err = runSSHCommand(command)
+		out, err = ExecuteCommandOnTarget(command)
 	} else {
 		shell := "sh"
 		if os.Getenv("SHELL") != "" {
@@ -180,8 +180,9 @@ func runCommand(command string) (string, error) {
 		out, err = cmd.CombinedOutput()
 		LOG_DEBUG("%s\n%s", cmd.String(), string(out))
 
-		if exiterr, e := err.(*exec.ExitError); e {
-			err = mkError(exiterr.ExitCode())
+		if exitErr, e := err.(*exec.ExitError); e {
+			LOG_DEBUG("Execute command: %s exited with error: %v", command, exitErr)
+			err = mkError(exitErr.ExitCode())
 		}
 	}
 
@@ -193,6 +194,10 @@ func generateLoadScript(modulesToLoad, modulesToUnload []dekuModule) (string, er
 	var insmod string
 	var reloadScript = ""
 	var checkTransition = config.kernelVersion >= versionNum(5, 10, 0) // checking patch transition in not reliable on kernel <5.10
+	var isAndroid = "isAndroid=false"
+	if config.isAndroid {
+		isAndroid = "isAndroid=true"
+	}
 
 	reloadScript += `#!/bin/sh
 printHangingTask() {
@@ -206,11 +211,18 @@ INSMOD=insmod
 RMMOD=rmmod
 TEE=tee
 GREP=grep
-if [ ! $(id -u) -eq 0 ]; then
+` + isAndroid + `
+
+if [ ! $(id -u) -eq 0 ] && ! $isAndroid; then
 	INSMOD="sudo insmod"
 	RMMOD="sudo rmmod"
 	TEE="sudo tee"
 	GREP="sudo grep"
+fi
+if $isAndroid; then
+	TEE="$TEE -a"
+else
+	TEE="$TEE --append"
 fi
 `
 	patchOnlyModules := true
@@ -228,7 +240,7 @@ fi
 				if strings.HasSuffix(string(patch.ObjPath), ".ko") {
 					modDep := filenameNoExt(string(patch.ObjPath))
 					modDep = strings.ReplaceAll(modDep, "-", "_")
-					reloadScript += "\ngrep -q '\\b" + modDep + "\\b' /proc/modules\n"
+					reloadScript += "\ngrep -qw " + modDep + " /proc/modules\n"
 					reloadScript += "if [ $? != 0 ]; then\n"
 					reloadScript += "	echo \"Can't apply changes for " + string(patch.SrcFile) +
 						" because the '" + modDep + "' module is not loaded\"\n"
@@ -245,7 +257,7 @@ fi
 
 		unload += "if [ -d " + moduleSys + " ]; then\n"
 		unload += "	for i in $(seq 1 20); do\n"
-		unload += "		out=$(sh -c \"echo 0 | $TEE --append " + moduleSys + "/enabled\" 2>&1) && break\n"
+		unload += "		out=$(sh -c \"echo 0 | $TEE " + moduleSys + "/enabled\" 2>&1) && break\n"
 		unload += "		[ -z \"${out##*Permission denied*}\" ] && { exit " + fmt.Sprintf("%d", ERROR_PERMISSION_DENIED) + "; }\n"
 		unload += "		[ -z \"${out##*I/O error*}\" ] && sleep 1;\n"
 		unload += "	done\n"
@@ -330,13 +342,13 @@ func loadModules(modulesToLoad, modulesToUnload []dekuModule) error {
 		}
 		filesToUpload = append(filesToUpload, scriptPath)
 
-		if out, err := runSSHCommand("mkdir -p " + REMOTE_DIR); err != nil {
+		if out, err := ExecuteCommandOnTarget("mkdir -p " + config.dstPath); err != nil {
 			LOG_ERR(nil, "Error during creating remote directory: %s", out)
 			return err
 		}
 
-		runSSHCommand("rm " + REMOTE_DIR + "/*.ko > /dev/null 2>&1")
-		out, err := uploadFiles(filesToUpload)
+		ExecuteCommandOnTarget("rm " + config.dstPath + "/*.ko > /dev/null 2>&1")
+		out, err := UploadFilesOnTarget(filesToUpload)
 		if err != nil {
 			LOG_ERR(err, "Error during upload files on the device:%s", out)
 			return mkError(ERROR_UPLOAD_FILES)
@@ -353,9 +365,7 @@ func loadModules(modulesToLoad, modulesToUnload []dekuModule) error {
 
 	var out string
 	if isRemoteDeploy() {
-		var byteOut []byte
-		byteOut, err = runSSHCommand("sh " + REMOTE_DIR + "/" + DEKU_RELOAD_SCRIPT + " 2>&1")
-		out = string(byteOut)
+		scriptPath = config.dstPath + "/" + DEKU_RELOAD_SCRIPT
 	} else {
 		// To deal with the "insmod: ERROR: could not insert module .ko: Text file busy" issue
 		for _, module := range modulesToLoad {
@@ -364,9 +374,8 @@ func loadModules(modulesToLoad, modulesToUnload []dekuModule) error {
 			copyFile(tmpKoFile, module.KoFile)
 			os.Remove(tmpKoFile)
 		}
-
-		out, err = runCommand("sh " + scriptPath + " 2>&1")
 	}
+	out, err = runCommand("sh " + scriptPath + " 2>&1")
 
 	if err == nil {
 		LOG_INFO("%sChanges successfully applied!%s", GREEN, NC)
@@ -380,7 +389,7 @@ func loadModules(modulesToLoad, modulesToUnload []dekuModule) error {
 			LOG_INFO("%s", out)
 			LOG_INFO("----------------------------------------")
 			LOG_INFO("Failed to apply changes!")
-			LOG_INFO("Check the system logs on the device for more information.")
+			LOG_INFO("Check the system logs on the device for more information. %s", err)
 		}
 
 		return err
