@@ -19,7 +19,7 @@ TAGS=test/tags/tags
 
 function findColdFunction()
 {
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local files=`find "$BUILD_DIR/drivers" -name "*.o" ! -name '*.mod.o'  -not -path "*lib*"`
 	while read -r file;
 	do
@@ -63,7 +63,7 @@ coldFunctionTest()
 	local function=$2
 	local coldFunction=$3
 	local filename=$(filenameNoExt "$file")
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	revertChanges 2>/dev/null
 
@@ -71,7 +71,7 @@ coldFunctionTest()
 
 	logStep -n "Detection cold function ($file)... "
 
-	out=$(dekuBuild --log -v) || { logErr "Fail"; exitError 1; }
+	out=$(dekuBuild --stdout -v) || { logErr "Fail"; exitError 1; }
 	local objFile=$(find $WORKDIR -name "$filename.o")
 	readelf -sW "$objFile" >> $LOG_FILE
 	readelf -sW "$objFile" | grep -q "$coldFunction.cold" || { logErr "Fail"; exitError 2; }
@@ -91,7 +91,7 @@ test()
 	if [[ $KERNEL_VER == v6.8 || $KERNEL_VER == v6.11 ]]; then
 		coldFunctionTest "drivers/gpu/drm/display/drm_dp_mst_topology.c" "drm_dp_mst_dump_sideband_msg_tx" "drm_dp_mst_dump_sideband_msg_tx"
 	else
-		# if [[ $KERNEL_VER != v6.6.* && $KERNEL_VER != v6.12.* ]]; then
+		# if [[ $KERNEL_VERSION != v6.6.* && $KERNEL_VERSION != v6.12.* ]]; then
 			coldFunctionTest "net/core/dev.c" "qdisc_pkt_len_init" "__dev_queue_xmit"
 			coldFunctionTest "net/core/sock.c" "req_prot_init" "proto_register"
 		# fi

@@ -1,0 +1,3 @@
+.klp.sym.vmlinux.singleton_fops,0
+.klp.sym.vmlinux.vm_ops_cpu,0
+.klp.sym.vmlinux.vm_ops_gtt,0

@@ -15,7 +15,7 @@ checkCall()
 	local function=$2
 	local cmd=$3
 	local text=$4
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	if [[ "$testmodify" != "nomodify" ]]; then
 		appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"$text\\\n\");"

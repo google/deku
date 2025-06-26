@@ -15,12 +15,12 @@ checkNoValidChanges()
 	local file=$1
 	local validfunction=$2
 	local novalidfunction=$3
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	appendToFunction "$srcDir/$file" $validfunction "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU test\");"
 
 	logStep -n "Checking if valid changes are properly detected... "
-	out=$(dekuDeploy --log) || { logErr "Fail"; exit 1; }
+	out=$(dekuDeploy --stdout) || { logErr "Fail"; exit 1; }
 	grep -q "Loading..." <<< "$out" || { logErr "Fail"; exit 2; }
 	grep -q "Changes successfully applied!" <<< "$out" || { logErr "Fail"; exit 3; }
 	logStep "OK"
@@ -28,13 +28,13 @@ checkNoValidChanges()
 	appendToFunction "$srcDir/$file" $novalidfunction "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU test\");"
 
 	logStep -n "Checking if no valid changes are properly detected... "
-	out=$(dekuBuild --log) || { logErr "Fail"; exit 4; }
+	out=$(dekuBuild --stdout) || { logErr "Fail"; exit 4; }
 	logStep "OK"
 
 	logStep "Check reverting changes... "
 	git -C "$srcDir" checkout $file 2>/dev/null
 	appendToFunction "$srcDir/$file" $novalidfunction "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU test\");"
-	out=$(dekuDeploy --log -v)
+	out=$(dekuDeploy --stdout -v)
 	local res=$?
 	[[ $res != 0 ]] && { logErr "Failed with return code: $res"; exit 5; }
 	grep -q "Reverting changes from $file" <<< "$out" || { logErr "Fail"; exit 6; }

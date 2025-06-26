@@ -15,21 +15,21 @@ test()
 	local function="tcp_v4_connect"
 	local text="${ScriptName}DEKUDEKUDEKUTEST"
 	local newtext="${ScriptName}dekutestdeku"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"$text\");"
 
-	buildKernelToLaunch || exitError 1
+	buildKernelToLaunch || exitDirtyError 1
 	runQemu
 
 	sed -i s/$text/$newtext/g "$srcDir/$file"
 
 	clearLogs
-	dekuDeploy || exitError 2
+	dekuDeploy || exitDirtyError 2
 	remoteSh "wget -q --spider google.com"
-	checkIfDmesgContains "$newtext" || exitError 3
+	checkIfDmesgContains "$newtext" || exitDirtyError 3
 
-	return 0
+	exitDirtyError 0
 }
 
 main()

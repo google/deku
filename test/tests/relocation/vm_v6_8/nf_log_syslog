@@ -1,0 +1,4 @@
+.klp.sym.nf_log_syslog.dump_ipv4_packet,0
+.klp.sym.nf_log_syslog.dump_mac_header,0
+.klp.sym.nf_log_syslog.nf_log_dump_packet_common.isra.0,0
+.klp.sym.nfnetlink_log.default_loginfo,0

@@ -12,7 +12,7 @@ DESCRIPTION="BUG()"
 check()
 {
 	local text="$1"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	logStep "Clear from previous test"
 	revertChanges

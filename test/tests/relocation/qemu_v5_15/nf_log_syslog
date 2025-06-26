@@ -1,0 +1,4 @@
+.klp.sym.vmlinux.default_loginfo,2
+.klp.sym.vmlinux.dump_ipv4_packet,0
+.klp.sym.vmlinux.nf_log_arp_packet,0
+.klp.sym.vmlinux.nf_log_ip6_packet,0

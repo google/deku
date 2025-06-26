@@ -17,7 +17,7 @@ setCpuOnlineState()
 
 stalledTaskTest()
 {
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	logStep -n "Check if stalled task is properly detected... "
 	sed -i "s/oom_reap_task(tsk);/{oom_reap_task(tsk);pr_info(\"\");}/g" "$srcDir/mm/oom_kill.c"
@@ -25,7 +25,7 @@ stalledTaskTest()
 	local sudoCmd=
 	[[ $VM_TEST != "" ]] && sudoCmd="sudo"
 	setCpuOnlineState 0
-	out=$(dekuDeploy --log) && { setCpuOnlineState 1; logErr "Fail"; exitError 1; }
+	out=$(dekuDeploy --stdout) && { setCpuOnlineState 1; logErr "Fail"; exitError 1; }
 	setCpuOnlineState 1
 
 	grep -q "The oom_reaper \[PID: [0-9][0-9]*\] blocks the application of changes" <<< "$out" || { logErr "Fail"; exitError 2; }

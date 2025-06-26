@@ -16,7 +16,7 @@ checkCall()
 	local cmd=$3
 	local text=$4
 	local testmodify=$5
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	if [[ "$testmodify" != "nomodify" ]]; then
 		appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"$text\\\n\");"
@@ -39,7 +39,7 @@ test()
 	local file=net/ipv4/tcp_ipv4.c
 	local function=tcp_v4_connect
 	local cmd="wget -q --spider google.com"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	logStep "Test first modification..."
 	checkCall "$file" $function "$cmd" "[$SCRIPT_NAME] test1"

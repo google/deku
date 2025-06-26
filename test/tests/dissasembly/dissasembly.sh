@@ -14,30 +14,18 @@ test()
 {
 	local file=$1
 	local fun=$2
-	local outFile=/tmp/disass-$KERNEL_VER.txt
+	local outFile=/tmp/disass-$KERNEL_VERSION.txt
 
-	local dir=test/tests/dissasembly/files
-
-	if [[ $VM_TEST != "" ]]; then
-		# cp $dir/$file.o $WORKDIR/../$file.o
-		# cp $dir/$fun.dis $WORKDIR/../$fun.dis
-		copyToRemote $dir/$file.o
-		copyToRemote $dir/$fun.dis
-		runCmd "mv ../$file.o $file.o"
-		runCmd "mv ../$fun.dis $fun.dis"
-		dir=.
-	fi
-
-	runCmd "./elfutils --disassemble -f $dir/$file.o -s $fun > $outFile"
+	runCmd "./elfutils --disassemble -f test/tests/dissasembly/files/$file.o -s $fun" > $outFile
 	sed -i 's/ *$//' $outFile
 	sed -i 's/\r/\n/g; s/\n$//' $outFile
 	logStep -n "$file $fun... "
 	# cp $outFile $dir/$fun.dis
-	runCmd cmp $outFile $dir/$fun.dis || { \
+	cmp $outFile $dir/$fun.dis || { \
 		echo >> $LOG_FILE; \
 		diff -y $outFile $dir/$fun.dis >> $LOG_FILE; \
 		logErr "Failed"; \
-		exit 1; \
+		return 1; \
 	}
 	logStep "OK"
 }
@@ -45,15 +33,23 @@ test()
 main()
 {
 	MAIN_PATH=`dirname "$0"`
+	local dir=test/tests/dissasembly/files
+	if [[ $VM_TEST ]]; then
+		runCmd "mkdir -p $dir" >/dev/null
+		copyToRemote $dir deku/$dir/..
+	fi
 
-	test i915_gem_mman i915_gem_mmap
-	test hpet hpet_clkevt_legacy_resume.cold
-	test timerfd __x64_sys_timerfd_create
-	test mmap __do_sys_brk
-	test mmap vm_unmapped_area
-	test route fnhe_hashfun
-	test dev net_rx_action
-	test intel_gtt i915_vm_lock_objects
+	test i915_gem_mman i915_gem_mmap || exitError
+	test hpet hpet_clkevt_legacy_resume.cold || exitError
+	test timerfd __x64_sys_timerfd_create || exitError
+	test mmap __do_sys_brk || exitError
+	test mmap vm_unmapped_area || exitError
+	test route fnhe_hashfun || exitError
+	test dev net_rx_action || exitError
+	test intel_gtt i915_vm_lock_objects || exitError
+	logInfo "Check expected failure..."
+	test hpet hpet_setup && exitError
+	logInfo "Failure... is OK" # this log is needed to not return error from above test
 }
 
 main $@

@@ -29,7 +29,11 @@ function addCellMenu(cell, testName, systemName, kernel, querySelector=".cellMen
 			item.textContent = 'Run on ' + copyAgents[i];
 			item.className = 'testMenuItem';
 			item.addEventListener('click', function() {
-				runTestOnAgent(copyAgents[i], testName, systemName, kernel);
+				priority = true;
+				if (testName == "*" || systemName == "*" || kernel == "*") {
+					priority = false;
+				}
+				runTestOnAgent(copyAgents[i], testName, systemName, kernel, priority);
 				document.body.removeChild(menu);
 			});
 			menu.appendChild(item);
@@ -59,8 +63,15 @@ function addKernelSet(name, ...versions)
 	kernelsSetNames.push(name);
 	const headRow = document.getElementById("zz");
 	const kernelCell = headRow.insertCell();
-	kernelCell.outerHTML = '<th class="za" colspan='+versions.length+'><div style="display:flex"><div style="flex-grow: 1">' + name + '</div><div id="cellMenu_'+name+'" class="cellMenu"></div></div></th>';
+	kernelCell.outerHTML = '<th colspan='+versions.length+'><div style="display:flex"><div><input type="checkbox" checked="checked" id="system_check_' + name + '" /></div><div style="flex-grow: 1">' + name + '</div><div id="cellMenu_'+name+'" class="cellMenu"></div></div></th>';
 	addCellMenu(headRow, "*", name, "*", '#cellMenu_'+name);
+	const checkBox = document.getElementById("system_check_" + name);
+	checkBox.addEventListener('click', function() {
+		const cells = document.querySelectorAll('table thead th input[type="checkbox"]');
+		let filtered = Array.from(cells).filter(cell => cell.id.startsWith("system_check_") && cell.checked);
+		let filteredNames = filtered.map(cell => cell.id.replace("system_check_", ""));
+		filteredSystemToRunTestsJS(filteredNames.join(" "));
+	});
 
 	const headRowV = document.getElementById("kernelVersions");
 	for (let i = 0; i < versions.length; i++) {
@@ -69,7 +80,7 @@ function addKernelSet(name, ...versions)
 		if (!text.startsWith("v"))
 			text = "v6.x"
 		kernelCellV.innerHTML = '<th><div style="display:flex"><div style="flex-grow: 1">' + text + '</div><div class="cellMenu"></div></div></th>';
-		addCellMenu(kernelCellV, "testName2", "systemName2", "kernels2[systemName][j]");
+		addCellMenu(kernelCellV, "*", name, text);
 	}
 }
 
@@ -126,5 +137,16 @@ function SetCount(number)
 	for (let i = 0; i < 10; i++) {
 		const cell = newRow.insertCell();
 		cell.textContent = Math.floor(Math.random() * 5);
+	}
+}
+
+function onLoad() {
+	document.body.addEventListener('click', onClick);
+	function onClick({target}) {
+		if (target.classList.contains("testStatusSuccess")) {
+			const testIndex = target.id.split("_")[1];
+			var state = target.src.includes("empty") ? 0 : 1;
+			setSuccessTestStatusJS(testIndex, state);
+		}
 	}
 }

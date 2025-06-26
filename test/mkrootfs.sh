@@ -12,7 +12,7 @@ ARM64=
 echo "Download rootfs image"
 arch="amd64"
 [[ $ARM64 != "" ]] && arch="arm64"
-curl https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.1-base-${arch}.tar.gz -o ubuntu-base.tar.gz
+curl https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.2-base-${arch}.tar.gz -o ubuntu-base.tar.gz
 
 echo "Make qcow2 image"
 qemu-img create -f qcow2 rootfs.qcow2 800M

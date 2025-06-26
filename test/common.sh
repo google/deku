@@ -207,7 +207,7 @@ runQemu()
 	if [[ $LOCAL_TEST != "" ]]; then
 		return
 	elif [[ $VM_TEST != "" ]]; then
-		timeout --signal=SIGKILL 5 ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "ls -l"
+		timeout --signal=SIGKILL 5 ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "true"
 		if [[ $? == 0 ]]; then
 			ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "sudo reboot"
 			waitForSystemBootUp && return
@@ -286,7 +286,7 @@ remoteSh()
 	elif [[ $CHROMEOS != "" ]]; then
 		REMOTE_OUT=$(ssh -i /mnt/host/source/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=error "$@")
 	elif [[ $VM_TEST != "" ]]; then
-		REMOTE_OUT=$(ssh test@localhost -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
+		REMOTE_OUT=$(ssh test@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
 	else
 		REMOTE_OUT=$(ssh root@localhost -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
 	fi
@@ -310,12 +310,15 @@ runCmd()
 {
 	if [[ $LOCAL_TEST != "" ]]; then
 		$@ | tee -a $LOG_FILE
+		return ${PIPESTATUS[0]}
 	elif [[ $CHROMEOS != "" ]]; then
 		$@ | tee -a $LOG_FILE
+		return ${PIPESTATUS[0]}
 	elif [[ $VM_TEST != "" ]]; then
 		remoteShOut "cd deku; $@"
 	else
 		docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest $@ | tee -a $LOG_FILE
+		return ${PIPESTATUS[0]}
 	fi
 }
 
@@ -324,7 +327,7 @@ copyToRemote()
 	if [[ $LOCAL_TEST != "" ]]; then
 		REMOTE_OUT=$(cp "$1" "$2")
 	elif [[ $CHROMEOS != "" ]]; then
-		REMOTE_OUT=$(scp -i /mnt/host/source/testing_rsa -P $CROS_SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$1" root@localhost:"$2")
+		REMOTE_OUT=$(scp -r -i /mnt/host/source/testing_rsa -P $CROS_SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$1" root@localhost:"$2")
 	elif [[ $VM_TEST != "" ]]; then
 		REMOTE_OUT=$(cp -rf "$1" "/tmp/deku-vm-mount/$2")
 	else
@@ -375,9 +378,7 @@ buildDir()
 		getLocalKernelDir
 	elif [[ $CHROMEOS != "" ]]; then
 		if [[ $kernelVersion != "" ]]; then
-			# replace in the kernelVersion "." with "_"
-			kerndir=${kernelVersion//./_}
-			kerndir=${kerndir//v/}
+			local kerndir=$(crosKernelVersion $kernelVersion)
 			echo "$basedir/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$kerndir"
 			return
 		fi
@@ -434,7 +435,7 @@ export -f prepareKernelSources
 workdirContainsOnly()
 {
 	local notcontains=()
-	local modules=`find $WORKDIR -type d -name deku_*`
+	local modules=`find $WORKDIR -type d -name "deku_*"`
 	for mod in "$@"; do
 		[ ! -f "$WORKDIR/$mod/$mod.ko" ] && notcontains+="$mod  "
 		modules=`sed "/^$WORKDIR\/$mod\$/d" <<< "$modules"`
@@ -442,7 +443,12 @@ workdirContainsOnly()
 	[[ $modules != "" ]] && { >&2 echo -e "${RED}Workdir contains unexpected modules:$modules${NC}"; return 1; }
 	[[ "$@" != "" && "$notcontains" != "" ]] && { >&2 echo -e "${RED}Workdir does not contains expected modules:${notcontains[@]}${NC}"; return 1; }
 	[[ "$modules" != "" && "$notcontains" != "" ]] && return 1
-	logInfo "Workdir contains only modules '$@'... OK"
+	if [[ "$@" == "" ]]; then
+		logInfo "Workdir is empty... OK"
+	else
+		logInfo "Workdir contains only modules '$@'... OK"
+	fi
+	return 0
 }
 export -f workdirContainsOnly
 
@@ -535,8 +541,8 @@ buildKernelToLaunch()
 
 	local extraparams=$1
 	local logFile=$(logFile build)
-	local srcDir=$(sourceDir $KERNEL_VER)
-	local buildDir=$(buildDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local buildDir=$(buildDir $KERNEL_VERSION)
 
 	[[ "$TEST_ON_CHROMEBOOK" ]] && return
 
@@ -582,17 +588,24 @@ sudo ./update_grub.sh test;
 }
 export -f buildKernelToLaunch
 
+kernelConfigFile()
+{
+	if [[ $CHROMEOS ]]; then
+		local srcDir="$(sourceDir $KERNEL_VERSION)"
+		echo "$srcDir/chromeos/config/chromeos/x86_64/chromeos-intel-pineview.flavour.config"
+	else
+		echo "$BUILD_DIR/.config"
+	fi
+}
+export -f kernelConfigFile
+
 enableKernelConfig()
 {
 	local flag=$1
 	local action="--enable"
 	[[ $2 != "" ]] && action=$2
-	local srcDir="$(sourceDir $KERNEL_VER)"
-	local config="$BUILD_DIR"/.config
-	if [[ $CHROMEOS != "" ]]; then
-		config="$srcDir/chromeos/config/chromeos/x86_64/chromeos-intel-pineview.flavour.config"
-	fi
-	"$srcDir/scripts/config" --file "$config" $action $flag
+	local srcDir="$(sourceDir $KERNEL_VERSION)"
+	"$srcDir/scripts/config" --file "$(kernelConfigFile)" $action $flag
 }
 export -f enableKernelConfig
 
@@ -601,9 +614,9 @@ prepareKernel()
 	local version=$1
 	local usellvm=$2
 	local extraparams=
-	local srcDir=$(sourceDir $version)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local buildDir=$BUILD_DIR
-	[[ $version != "" ]] && buildDir=$(buildDir $version)
+	[[ $version != "" ]] && buildDir=$(buildDir $KERNEL_VERSION)
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		local kernelDir=$(getLocalKernelDir)
@@ -644,8 +657,8 @@ if [ -z \"\$(ls -A $srcDir)\" ]; then
 else
 	cd $srcDir;
 	echo 'Reset kernel dir';
-	git clean -d -f;
-	git reset --hard;
+	git clean -d -f > /dev/null;
+	git reset --hard > /dev/null;
 fi;
 cd $srcDir;
 make kernelversion;
@@ -664,18 +677,18 @@ scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
 			remoteShOut "$cmd" || { logErr "Fail to prepare kernel"; return 1; }
 
 		else
-			git -C "$srcDir" reset --hard
-			git -C "$srcDir" clean -d -f
+			git -C "$srcDir" reset --hard > /dev/null 2>&1
+			git -C "$srcDir" clean -d -f > /dev/null 2>&1
+
 		fi
 
 		[[ "$TEST_ON_CHROMEBOOK" ]] && return
 		if [[ $VM_TEST == "" ]]; then
-			git -C "$srcDir" reset --hard
-			git -C "$srcDir" clean -d -f
+			git -C "$srcDir" reset --hard > /dev/null 2>&1
+			git -C "$srcDir" clean -d -f > /dev/null 2>&1
 
 			[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
-			[[ $version != "" ]] && export KERNEL_VER=$version
-			make $extraparams -C "$srcDir" O="$buildDir" defconfig >/dev/null
+			docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" defconfig >/dev/null 2>&1
 			sed -i s/=m/=y/g "$buildDir/.config"
 			enableKernelConfig FRAME_POINTER_VALIDATION
 			enableKernelConfig FTRACE
@@ -799,7 +812,7 @@ dekuBuild()
 	local logFile=$(logFile build)
 	local out=
 	local printOut=
-	if [[ $1 == "--log" ]]; then
+	if [[ $1 == "--stdout" ]]; then
 		printOut=1
 		shift
 	fi
@@ -821,10 +834,10 @@ dekuBuild()
 					 livepatch 2>&1")
 	else
 		out=$(docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest \
-			./deku -v --workdir="$WORKDIR" \
-					 --builddir="/kernel/${BUILD_DIR##*/}" \
-					 $@ \
-					 livepatch 2>&1)
+			./deku --workdir="$WORKDIR" \
+				   --builddir="/kernel/${BUILD_DIR##*/}" \
+				   $@ \
+				   livepatch 2>&1)
 	fi
 
 	res=$?
@@ -840,7 +853,7 @@ dekuDeploy()
 	local out=
 	local printOut=
 	local builddir=
-	if [[ $1 == "--log" ]]; then
+	if [[ $1 == "--stdout" ]]; then
 		printOut=1
 		shift
 	fi
@@ -888,7 +901,7 @@ export -f dekuDeploy
 
 revertChanges()
 {
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	git -C "$srcDir" restore $(git -C "$srcDir" ls-files $FILES 2>/dev/null | xargs)
 
@@ -911,6 +924,11 @@ exitError()
 	fi
 
 	exit $code
+}
+
+exitDirtyError()
+{
+	exitError $?
 }
 
 function crosKernelVersion()
@@ -985,8 +1003,8 @@ parseArgs()
 			;;
 			--kernel)
 			KERNEL_VER="$2"
-			export BUILD_DIR=$(buildDir $KERNEL_VER)
-			export SOURCE_DIR=$(sourceDir $KERNEL_VER)
+			export BUILD_DIR=$(buildDir $KERNEL_VERSION)
+			export SOURCE_DIR=$(sourceDir $KERNEL_VERSION)
 			shift # past argument
 			shift # past value
 			;;

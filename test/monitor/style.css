@@ -128,3 +128,6 @@ table {
 .testMenuItem:hover {
   background-color: rgb(161, 45, 177);
 }
+
+.testStatusSuccess {
+}

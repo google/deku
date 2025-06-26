@@ -17,14 +17,24 @@
 			}
 		</style>
 		<script>
-			function runTestOnAgent(agent, testName, system, kernel)
+			function runTestOnAgent(agent, testName, system, kernel, prioritize = false)
 			{
-				webui.scheduleTestOnAgent(agent + " " + testName + " " + system + " " + kernel);
+				webui.scheduleTestOnAgent(agent + " " + testName + " " + system + " " + kernel + " " + (prioritize ? "high" : "low"));
+			}
+
+			function filteredSystemToRunTestsJS(systems)
+			{
+				webui.filteredSystemToRunTests(systems);
+			}
+
+			function setSuccessTestStatusJS(testIndex, state)
+			{
+				webui.setSuccessTestStatus(testIndex+" "+state);
 			}
 		</script>
 		<link rel="stylesheet" href="style.css">
 	</head>
-	<body onload="myFunction()">
+	<body onload="onLoad()">
 		<div style="display: flex;">
 			<div>
 				<button id="StartButton">Start tests</button>

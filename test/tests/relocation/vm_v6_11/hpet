@@ -1,0 +1,5 @@
+.klp.sym.vmlinux.boot_hpet_disable,0
+.klp.sym.vmlinux.hpet_address,0
+.klp.sym.vmlinux.hpet_base,0
+.klp.sym.vmlinux.hpet_disable.cold,0
+.klp.sym.vmlinux.hpet_virt_address,0

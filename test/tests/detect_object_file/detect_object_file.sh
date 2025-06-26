@@ -14,7 +14,7 @@ checkDetectionObjectFile()
 {
 	local text="pr_info(\"test\");"
 	local srcfile=drivers/input/misc/uinput.c
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	logStep "Check if basic generate module works"
 	prepareKernelAndDeploy $KERNEL_VER CONFIG_INPUT_UINPUT
@@ -30,30 +30,30 @@ checkDetectionObjectFile()
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 
-	dekuBuild -v || exit 3
+	dekuBuild -v || exitDirtyError 3
 	koFile=$(find $WORKDIR -name "deku_*.ko")
-	[[ -f "$koFile" ]] && exit 4
+	[[ -f "$koFile" ]] && exitDirtyError
 
 	logStep "Check if DEKU module is generated for kernel module if it's enabled in kernel config"
 	prepareKernelAndDeploy $KERNEL_VER +CONFIG_INPUT_UINPUT
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 
-	dekuBuild || exit 5
+	dekuBuild || exitDirtyError 5
 	koFile=$(find $WORKDIR -name "deku_*.ko")
-	[[ ! -f "$koFile" ]] && exit 6
+	[[ ! -f "$koFile" ]] && exitDirtyError
 
 	logStep "Check if DEKU module is not generated for kernel module after it's getting disabled in kernel config"
 	prepareKernelAndDeploy $KERNEL_VER -CONFIG_INPUT_UINPUT
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 
-	dekuBuild || exit 7
+	dekuBuild || exitDirtyError 7
 	koFile=$(find $WORKDIR -name "deku_*.ko")
-	[[ -f "$koFile" ]] && exit 8
+	[[ -f "$koFile" ]] && exitDirtyError
 
-	out=$(dekuBuild --log)
-	grep -q "No valid changes detected" <<< "$out" || { logErr "Fail"; exit 9; }
+	out=$(dekuBuild --stdout)
+	grep -q "No valid changes detected" <<< "$out" || exitDirtyError
 
 	logStep "OK"
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,28 +14,7 @@ import (
 
 var w ui.Window
 var testStarted = false
-
-func slicesIndex(s []string, v string) int {
-	for i := range s {
-		if v == s[i] {
-			return i
-		}
-	}
-	return -1
-}
-
-func slicesContains(s []string, name string) bool {
-	return slicesIndex(s, name) != -1
-}
-
-func myCountFunc(e ui.Event) any {
-	// count, _ := e.Window.Script("return count;", ui.ScriptOptions{})
-	// i, _ := strconv.Atoi(count)
-	// e.Window.Run(fmt.Sprintf("SetCount(%v);", i+10))
-	// e.Window.Run(fmt.Sprintf("SetCount(%s);", "testName"))
-	addTests(e.Window)
-	return nil
-}
+var activeSystems = []string{}
 
 type KernelSet struct {
 	name    string
@@ -93,6 +73,37 @@ var allAgents = []string{}
 var agentsPerSystem = make(map[string][]string)
 var scheduledTests = []TestEntity{}
 
+func slicesIndex(s []string, v string) int {
+	for i := range s {
+		if v == s[i] {
+			return i
+		}
+	}
+	return -1
+}
+
+func slicesContains(s []string, name string) bool {
+	return slicesIndex(s, name) != -1
+}
+
+func myCountFunc(e ui.Event) any {
+	// count, _ := e.Window.Script("return count;", ui.ScriptOptions{})
+	// i, _ := strconv.Atoi(count)
+	// e.Window.Run(fmt.Sprintf("SetCount(%v);", i+10))
+	// e.Window.Run(fmt.Sprintf("SetCount(%s);", "testName"))
+	addTests(e.Window)
+	return nil
+}
+
+func getKernelSet(system string) KernelSet {
+	for _, set := range kernelSets {
+		if set.name == system {
+			return set
+		}
+	}
+	return KernelSet{}
+}
+
 func getSystemForAgent(agent string) string {
 	if strings.Contains(agent, "_cros_") {
 		return "cros"
@@ -150,13 +161,17 @@ func findNextTestIndexFor(agent string) int {
 	var nextTestName = ""
 	systems := []KernelSet{}
 	if getSystemForAgent(agent) == "cros" {
-		systems = append(systems, kernelSets[1 /*"cros"*/])
+		systems = append(systems, getKernelSet("cros"))
 	} else {
-		systems = append(systems, kernelSets[0 /*"qemu"*/])
-		systems = append(systems, kernelSets[2 /*"vm-ubuntu"*/])
+		systems = append(systems, getKernelSet("qemu"))
+		systems = append(systems, getKernelSet("vm-ubuntu"))
 	}
 
 	for _, system := range systems {
+		if slicesIndex(activeSystems, system.name) == -1 {
+			continue
+		}
+
 		var agentIndex = slicesIndex(agentsPerSystem[getSystemForAgent(agent)], agent)
 		var agentsCount = 0
 		for _, a := range allAgents {
@@ -227,6 +242,7 @@ func findNextTestIndexFor(agent string) int {
 
 func setKernelSets(w ui.Window) {
 	for _, system := range kernelSets {
+		activeSystems = append(activeSystems, system.name)
 		kernels := ""
 		for _, kernel := range system.kernels {
 			kernels += ", '" + kernel + "'"
@@ -345,16 +361,49 @@ func scheduleTestOnAgent(e ui.Event) any {
 	testName := strings.Split(args, " ")[1]
 	system := strings.Split(args, " ")[2]
 	kernel := strings.Split(args, " ")[3]
+	priority := strings.Split(args, " ")[4]
 
-	scheduledTests = append(scheduledTests, TestEntity{testName, system, kernel, "", agent, time.Now()})
+	if testName == "*" && priority == "low" {
+		kernelSet := getKernelSet(system)
+		for _, ker := range kernelSet.kernels {
+			if kernel != ker {
+				continue
+			}
+			for _, testName := range testNames {
+				scheduledTests = append(scheduledTests, TestEntity{testName, system, kernel, "", "", time.Now()})
+			}
+		}
+	} else {
+		test := TestEntity{testName, system, kernel, "", agent, time.Now()}
+		if priority == "high" {
+			scheduledTests = append([]TestEntity{test}, scheduledTests...)
+		} else {
+			scheduledTests = append(scheduledTests, test)
+		}
+	}
+	return nil
+}
+
+//lint:ignore U1000 it's used in the UI
+func filteredSystemToRunTests(e ui.Event) any {
+	args, _ := ui.GetArg[string](e)
+	activeSystems = strings.Split(args, " ")
+	return nil
+}
+
+func setSuccessTestStatus(e ui.Event) any {
+	args, _ := ui.GetArg[string](e)
+	testState, _ := strconv.Atoi(strings.Split(args, " ")[1])
+	testIndex, _ := strconv.Atoi(strings.Split(args, " ")[0])
+	fmt.Println("Set success test status", testIndex, testState)
 	return nil
 }
 
 func watchForAgents() {
 	lastWaitCheckTime := time.Time{}
 
-	for true {
-		w.Run(fmt.Sprintf("clearAgents();"))
+	for {
+		w.Run("clearAgents();")
 
 		doneAgents := getAgentFor("done")
 		for _, agent := range doneAgents {
@@ -363,7 +412,7 @@ func watchForAgents() {
 				status := getLineFromAgentFile(agent, "done", 1)
 				if status == "0" {
 					tests[index].status = "done"
-					status = `<div align="center"><img height=22pt src="pngegg.png" /></div>`
+					status = `<div align="center"><img class="testStatusSuccess" id="testSuccess_` + strconv.Itoa(index) + `" height=22pt src="successful.png" /></div>`
 				} else {
 					tests[index].status = "error: " + status
 					status = "error: " + status
@@ -385,7 +434,6 @@ func watchForAgents() {
 			}
 			lastWaitCheckTime = time.Now()
 			if len(waitingAgents) > 0 {
-				waitingAgents = []string{}
 				continue
 			}
 		}
@@ -427,6 +475,17 @@ func watchForAgents() {
 
 			if len(scheduledTests) > 0 {
 				st := scheduledTests[0]
+				if st.agent == "" /*&& getSystemForAgent(agent) == st.system*/ {
+					if st.system == "cros" {
+						if strings.Contains(agent, "cros") {
+							st.agent = agent
+						}
+					} else {
+						if !strings.Contains(agent, "cros") {
+							st.agent = agent
+						}
+					}
+				}
 				if st.agent == agent {
 					scheduledTests = scheduledTests[1:]
 					runTestOnAgent(agent, getTestIndexFor(st.name, st.system, st.kernel), true)
@@ -494,6 +553,12 @@ func startTests(e ui.Event) any {
 	testStarted = !testStarted
 	if testStarted {
 		text = "Stop tests"
+
+		for i, test := range tests {
+			if strings.HasPrefix(test.status, "error:") {
+				tests[i].status = ""
+			}
+		}
 	}
 	w.Run(fmt.Sprintf("document.getElementById('StartButton').innerHTML = '%s';", text))
 	return nil
@@ -526,6 +591,8 @@ func main() {
 	w.Bind("", events)
 	w.Bind("StartButton", startTests)
 	ui.Bind(w, "scheduleTestOnAgent", scheduleTestOnAgent)
+	ui.Bind(w, "filteredSystemToRunTests", filteredSystemToRunTests)
+	ui.Bind(w, "setSuccessTestStatus", setSuccessTestStatus)
 	w.ShowBrowser("index.html", ui.ChromiumBased)
 	ui.Wait()
 }

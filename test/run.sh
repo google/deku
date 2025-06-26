@@ -12,6 +12,8 @@ export VM_TEST=
 # export LOCAL_TEST=1
 EXIT_ON_FAILURE=
 
+export KERNEL_VERSION="KERNEL_VERSION_NOT_SET"
+
 . test/common.sh
 
 declare -A Tests
@@ -175,7 +177,6 @@ function revert()
 	# done
 
 	git -C "$srcDir" restore $(git -C "$srcDir" ls-files $files 2>/dev/null | xargs) || git -C "$srcDir" restore .
-
 	if [[ $VM_TEST == "" ]]; then
 		echo "$(git -C $srcDir status -s -- ':!debian')" >> $LOG_FILE
 	else
@@ -402,12 +403,17 @@ main()
 		esac
 	done
 
-	if [[ "${!Tests[@]}" != "" && $run_lts_tests ]]; then
-		if [[ $kernVer == "origin/master" ]]; then
-			kernVer=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | tail -n 1)
-		else
-			kernVer=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | grep -F ${kernVer}. | tail -n 1)
+	if [[ "${!Tests[@]}" != "" ]]; then
+		if [[ $run_lts_tests ]]; then
+			if [[ $kernVer == "origin/master" ]]; then
+				kernVer=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | tail -n 1)
+			else
+				kernVer=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | grep -F ${kernVer}. | tail -n 1)
+			fi
+		elif [[ $CHROMEOS ]]; then
+			:
 		fi
+		export KERNEL_VERSION=$kernVer
 	fi
 	local srcDir=$(sourceDir $kernVer)
 
@@ -429,6 +435,7 @@ main()
 		if [[ ! -f "$ROOTFS_IMG" ]]; then
 			logInfo "Rootfs image is not found. Generating..."
 			pushd test
+			sudo modprobe nbd
 			sudo ./mkrootfs.sh
 			popd
 		fi
@@ -445,8 +452,8 @@ main()
 
 	if [[ $rerun ]]; then
 		local testId=$(testId $kernVer $test)
-		sed -i "/$testId/d" test/logs/pass_test
-		sed -i "/$testId/d" test/logs/failed_test
+		sed -i "/$testId/d" test/logs/pass_test 2>/dev/null
+		sed -i "/$testId/d" test/logs/failed_test 2>/dev/null
 	fi
 
 # make -C "$srcDir" mrproper

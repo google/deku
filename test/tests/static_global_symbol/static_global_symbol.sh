@@ -13,7 +13,7 @@ checkLocalSymbol()
 {
 	local file="net/ipv4/route.c"
 	local function="ipv4_blackhole_route"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	[[ $KERNEL_VER == v5.10 ]] && return
 

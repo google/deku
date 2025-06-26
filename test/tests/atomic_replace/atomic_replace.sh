@@ -16,7 +16,7 @@ modifyFile()
 	local function=$2
 	local extra=$3
 	local text="[$SCRIPT_NAME] DEKU $function test$extra"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	git -C "$srcDir" restore $file 2>&1 > /dev/null
 	local funcName=__func__
@@ -47,7 +47,7 @@ containsNumberOfModulesAndPatches()
 test()
 {
 	local cmd="CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com; CMD='cat /dev/uinput 2>/dev/null'; eval \$CMD; eval sudo \$CMD; sleep 0.1"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	prepareKernelAndDeploy $KERNEL_VER +CONFIG_INPUT_UINPUT
 	runQemu
@@ -61,7 +61,7 @@ test()
 	dekuDeploy || exitError $LINENO
 	isNotCumulativeModule || exitError $LINENO
 	git -C "$srcDir" restore net/ipv4/tcp_ipv4.c kernel/sched/core.c
-	out=$(dekuDeploy --log -v) || exitError $LINENO
+	out=$(dekuDeploy --stdout -v) || exitError $LINENO
 	isCumulativeModule || exitError $LINENO
 	# workdirContainsOnly deku_00000000 || exitError $LINENO
 	grep -q "Reverting changes from net/ipv4/tcp_ipv4.c" <<< "$out" || exitError $LINENO

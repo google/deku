@@ -12,7 +12,7 @@ DESCRIPTION="Build after fixing errors"
 checkBuild()
 {
 	local file="drivers/gpu/drm/drm_mm.c"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	appendToFunction "$srcDir/$file" add_hole "pr_info(\"test\");"
 

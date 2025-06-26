@@ -1,0 +1,3 @@
+.klp.sym.vmlinux.default_loginfo,2
+.klp.sym.vmlinux.dump_ipv4_packet,0
+.klp.sym.vmlinux.dump_mac_header,0

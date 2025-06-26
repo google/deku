@@ -13,7 +13,7 @@ mappingTest()
 {
 	local file="net/ipv4/tcp_ipv4.c"
 	local text="[$SCRIPT_NAME] DEKU %s"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local functions=(tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_send_ack)
 	local functions2=(tcp_v4_connect tcp_v4_mtu_reduced do_redirect tcp_ld_RTO_revert tcp_v4_err tcp_v4_send_reset tcp_v4_send_ack tcp_v4_timewait_ack tcp_v4_reqsk_send_ack tcp_v4_inbound_md5_hash tcp_v4_init_req tcp_v4_route_req tcp_v4_conn_request tcp_v4_syn_recv_sock)
 	local functionsFun=(tcp_v4_init_seq tcp_v4_init_ts_off tcp_twsk_unique tcp_v4_pre_connect tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_inbound_md5_hash  tcp_v4_send_synack tcp_v4_reqsk_destructor)
@@ -30,7 +30,7 @@ mappingTest()
 	# 	appendToFunction "$srcDir/$file" $fun "printk(KERN_INFO \"$text/$fun\", __func__);" > /dev/null
 	# done
 
-	buildKernelToLaunch || exitError 1
+	buildKernelToLaunch || exitDirtyError 1
 	runQemu
 
 	for (( i=0; i<${#functions[@]}; i++ )); do
@@ -41,9 +41,9 @@ mappingTest()
 	# 	appendToFunction "$srcDir/$file" $fun "printk(KERN_INFO \"$text/$fun X\", __func__);" > /dev/null
 	# done
 
-	out=$(dekuDeploy --log -v) || { logErr "Fail"; exitError 2; }
-	grep -qF "Ambiguous symbol " <<< "$out" || { logErr "Fail"; exitError 3; }
-	grep -qF "Swap deku_static_test_var." <<< "$out" || { logErr "Fail"; exitError 4; }
+	out=$(dekuDeploy --stdout -v) || { logErr "Fail"; exitDirtyError 2; }
+	grep -qF "Ambiguous symbol " <<< "$out" || { logErr "Fail"; exitDirtyError 3; }
+	grep -qF "Swap deku_static_test_var." <<< "$out" || { logErr "Fail"; exitDirtyError 4; }
 
 	readelf -s -W "$WORKDIR/patch_e9fa88a1_tcp_ipv4/tcp_ipv4.o" >> $LOG_FILE
 
@@ -54,7 +54,7 @@ mappingTest()
 	do
 		if grep -qF " - var:" <<< "$line"; then
 			local valAfterUpdate=$(sed -nr 's/^.+ - func:(.+) - var:.+/\1/p' <<< "$line")
-			[[ $((lastVal+2)) != $valAfterUpdate ]] && { logErr "Value after update is invalid $((lastVal+2)) != $valAfterUpdate"; exitError 5; }
+			[[ $((lastVal+2)) != $valAfterUpdate ]] && { logErr "Value after update is invalid $((lastVal+2)) != $valAfterUpdate"; exitDirtyError 5; }
 			break
 		fi
 		lastVal=$(sed -n -e 's/^.* - func://p' <<< "$line")
@@ -64,6 +64,8 @@ mappingTest()
 
 	logStep "Check mapping __func__ macro..."
 	# TODO:
+
+	exitDirtyError 0
 }
 
 test()

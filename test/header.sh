@@ -66,8 +66,6 @@ readonly QEMU_BUILD_DIR="$TEST_CACHE_DIR/build-linux-deku"
 readonly CROS_BUILD_DIR="/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$CHROMEOS_KERNEL_VER"
 readonly VM_BUILD_DIR="/tmp/deku-vm-mount/linux"
 
-declare -g KERNEL_VERSION=$KERNEL_VERSION_DEFAULT_BASE
-
 declare -g SCRIPT_NAME=$(basename "$0" .sh)
 declare -g KERNEL_VER=
 declare -g QUICK_TEST=

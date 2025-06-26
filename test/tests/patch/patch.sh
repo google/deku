@@ -14,7 +14,7 @@ test()
 	local file="net/ipv4/tcp_output.c"
 	local function="tcp_syn_options"
 	local text="[$SCRIPT_NAME] DEKU patch $function test"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local patchesDir=/tmp/deku_patches
 	local localPatchesDir="$patchesDir"
 
@@ -29,7 +29,7 @@ test()
 	git -C "$srcDir" diff -- $FILES ':(exclude)*.config' > "$patchFile"
 	revertChanges
 
-	out=$(dekuBuild --log -p "$localPatchFile") || echo "$out" || exitError 1
+	out=$(dekuBuild --stdout -p "$localPatchFile") || echo "$out" || exitError 1
 	grep -q "Livepatch module was built:" <<< "$out" || exitError 2
 
 	# make sure that the kernel sources dir isn't patched
@@ -76,11 +76,11 @@ test()
 	sed -i "s/struct seq_file;/extern int _deku_var_test;\nstruct seq_file;/g" "$srcDir/include/net/mptcp.h"
 	git -C "$srcDir" diff -- $FILES ':(exclude)*.config' > "$patchesDir/p1.diff"
 	revertChanges
-	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"${text}_2 %d\", _deku_var_test++);" 
+	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"${text}_2 %d\", _deku_var_test++);"
 	git -C "$srcDir" diff -- $FILES ':(exclude)*.config' > "$patchesDir/p2.diff"
 	revertChanges
-	appendBeforeFunction "$srcDir/net/ethernet/eth.c" eth_type_trans "int _deku_var_test = 0;" 
-	appendToFunction "$srcDir/net/ethernet/eth.c" eth_type_trans "printk(KERN_INFO \"%s_2 %d\", __func__, _deku_var_test++);" 
+	appendBeforeFunction "$srcDir/net/ethernet/eth.c" eth_type_trans "int _deku_var_test = 0;"
+	appendToFunction "$srcDir/net/ethernet/eth.c" eth_type_trans "printk(KERN_INFO \"%s_2 %d\", __func__, _deku_var_test++);"
 	git -C "$srcDir" diff -- $FILES ':(exclude)*.config' > "$patchesDir/p3.diff"
 	revertChanges
 	appendBeforeFunction "$srcDir/include/net/arp.h" __ipv4_confirm_neigh "extern int _deku_var_test;"
@@ -110,7 +110,7 @@ test()
 
 	logStep "Test broken patch"
 	sed -i "s/eth_type_trans/ethX_type_trans/g" $patchesDir/p*.diff
-	out=$(dekuDeploy --log -p $localPatchesDir/*.diff) && exitError 27
+	out=$(dekuDeploy --stdout -p $localPatchesDir/*.diff) && exitError 27
 	grep -q "Failed to apply patch" <<< "$out" || exitError 28
 
 	logStep "OK"

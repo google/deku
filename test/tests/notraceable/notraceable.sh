@@ -22,7 +22,7 @@ function isTraceable()
 function findNontraceable()
 {
 	local bind=$1
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local files=`find "$BUILD_DIR/drivers" -name "*.o"  -not -path "*lib*"`
 	while read -r file;
 	do
@@ -60,14 +60,14 @@ checkNontraceable()
 	local file=$1
 	local function=$2
 	local status=$3
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	revertChanges
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 
 	logStep -n "Respect non-traceable function in $file... "
-	out=$(dekuDeploy --log -v)
+	out=$(dekuDeploy --stdout -v)
 	local res=$?
 	if [[ $status == "fail" ]]; then
 		[[ $res == 0 ]] && { logErr "Fail"; exitError; }
@@ -107,7 +107,7 @@ test()
 	# findNontraceable LOCAL # uncomment to find non-traceable functions
 	# findNontraceable GLOBAL # uncomment to find non-traceable functions
 
-	if [[ $KERNEL_VER == v5.10* ]]; then
+	if [[ $KERNEL_VERSION == v5.10* ]]; then
 		if [[ $CHROMEOS ]]; then
 			checkNontraceable drivers/gpu/drm/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		else
@@ -123,7 +123,7 @@ test()
 # 		checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok cpuidle_enter_s2idle
 # 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 # checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
-	if [[ $KERNEL_VER == v5.15* ]]; then
+	if [[ $KERNEL_VERSION == v5.15* ]]; then
 		if [[ $CHROMEOS ]]; then
 			checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		else
@@ -133,26 +133,26 @@ test()
 		return
 	fi
 
-	if [[ $KERNEL_VER == v6.1 || $KERNEL_VER == v6.1.* ]]; then
+	if [[ $KERNEL_VER == v6.1 || $KERNEL_VERSION == v6.1.* ]]; then
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		return
 	fi
 
-	if [[ $KERNEL_VER == v6.6* ]]; then
+	if [[ $KERNEL_VERSION == v6.6* ]]; then
 		checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok f:cpuidle_enter_s2idle
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
 		return
 	fi
 
-	if [[ $KERNEL_VER == v6.12* ]]; then
+	if [[ $KERNEL_VERSION == v6.12* ]]; then
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok f:cpuidle_enter_s2idle
 		checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
 		return
 	fi
 
-	if [[ $KERNEL_VER == v6.14.* || $KERNEL_VER == v6.15-* ]]; then
+	if [[ $KERNEL_VERSION == v6.14.* || $KERNEL_VERSION == v6.16-* ]]; then
 		checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok f:cpuidle_enter_s2idle
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
@@ -173,9 +173,9 @@ test()
 	else
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok f:process_single_tx_qlock f:drm_dp_queue_down_tx f:drm_dp_mst_wait_tx_reply.isra.0
 	fi
-	[[ $KERNEL_VER != v6.1.* ]] && checkNontraceable drivers/cpuidle/cpuidle.c cpuidle_enter_state fail # f:cpuidle_enter
+	[[ $KERNEL_VERSION != v6.1.* ]] && checkNontraceable drivers/cpuidle/cpuidle.c cpuidle_enter_state fail # f:cpuidle_enter
 
-	[[ $KERNEL_VER != v5.15.* ]] && checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
+	[[ $KERNEL_VERSION != v5.15.* ]] && checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
 }
 
 main()

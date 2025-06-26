@@ -88,7 +88,7 @@ test()
 {
 	local text="pr_info(\"testStaticKeys\");"
 	local cmd="wget --timeout=1 --tries=3 192.168.0.1 2>/dev/null"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local file="$srcDir/net/ipv4/tcp_ipv4.c"
 
 	prepareKernelAndDeploy $KERNEL_VER || exitError 1
@@ -115,21 +115,21 @@ test()
 	logStep "Modify code wrapped with built-in static keys"
 	sed -i 's/DEFINE_STATIC_KEY_TRUE(statickey_test);/DEFINE_STATIC_KEY_FALSE(statickey_test);/g' "$file"
 	sed -i 's/static_branch_disable(\&statickey_test);/static_branch_enable(\&statickey_test);/g' "$file"
-	buildKernelToLaunch || exitError 8
+	buildKernelToLaunch || exitDirtyError 8
 	runQemu
 
 	remoteSh $cmd
-	checkIfDmesgContains "BeforeX change key" || exitError 9
-	checkIfDmesgContains "AfterX change key" || exitError 10
+	checkIfDmesgContains "BeforeX change key" || exitDirtyError 9
+	checkIfDmesgContains "AfterX change key" || exitDirtyError 10
 
 	sed -i "s/AfterX change key/After change key/g" "$file"
 	sed -i "s/BeforeX change key/Before change key/g" "$file"
-	if [[ $KERNEL_VER != v5.10.* && $KERNEL_VER != v5.15* ]]; then
+	if [[ $KERNEL_VERSION != v5.10.* && $KERNEL_VERSION != v5.15* ]]; then
 		# TODO: probably value for static key is not set to the previous one on module load
-		dekuDeploy || exitError 11
+		dekuDeploy || exitDirtyError 11
 		remoteSh $cmd
-		# checkIfDmesgNOTContains "Before change key" || exitError 12
-		checkIfDmesgContains "After change key" || exitError 13 # uncomment if supported for migration static keys will be done
+		# checkIfDmesgNOTContains "Before change key" || exitDirtyError 12
+		checkIfDmesgContains "After change key" || exitDirtyError 13 # uncomment if supported for migration static keys will be done
 	fi
 
 	logStep "Revert conditions and modify code wrapped with built-in static keys"
@@ -138,7 +138,7 @@ test()
 
 	addStaticCall
 
-	buildKernelToLaunch || exitError 14
+	buildKernelToLaunch || exitDirtyError 14
 	runQemu
 
 	remoteSh $cmd
@@ -146,20 +146,22 @@ test()
 
 	sed -i "s/After change key/AfterX change key/g" "$file"
 	sed -i "s/Before change key/BeforeX change key/g" "$file"
-	dekuDeploy || exitError 16
+	dekuDeploy || exitDirtyError 16
 	remoteSh $cmd
-	# checkIfDmesgNOTContains "BeforeX change key" || exitError 17 # uncomment if supported for migration static keys will be done
-	checkIfDmesgContains "AfterX change key" || exitError 18
+	# checkIfDmesgNOTContains "BeforeX change key" || exitDirtyError 17 # uncomment if supported for migration static keys will be done
+	checkIfDmesgContains "AfterX change key" || exitDirtyError 18
 
 	logStep "Modify function with static keys"
 	appendToFunction "$srcDir/net/ipv4/udp.c" udp_destroy_sock "$text"
 	clearLogs
-	dekuDeploy || exitError 19
+	dekuDeploy || exitDirtyError 19
 	for i in $(seq 1 20); do
 		remoteSh 'echo test > /dev/udp/8.8.8.8/8000 || echo test | nc -u -w1 8.8.8.8 8000' 2>/dev/null
 		checkIfDmesgContains "testStaticKeys" 1>/dev/null 2>/dev/null && break
 	done
-	checkIfDmesgContains "testStaticKeys" || exitError 20
+	checkIfDmesgContains "testStaticKeys" || exitDirtyError 20
+
+	exitDirtyError 0
 }
 
 main()

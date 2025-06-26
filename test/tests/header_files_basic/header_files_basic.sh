@@ -154,7 +154,7 @@ expectedPatches_6_12=(
 	patch_f3cfb068_hid_redragon
 )
 
-expectedPatches_6_15=(
+expectedPatches_6_16=(
 	patch_0711c614_hid_monterey
 	patch_147bf8e3_hid_sunplus
 	patch_1eee55b7_hid_petalynx
@@ -606,14 +606,11 @@ expectedPatches_ubuntu_6_14=(
 
 test()
 {
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	local expectedPatches=
 
-	if [[ "$KERNEL_VER" == "$KERNEL_VERSION" ]]; then
-		expectedPatches="${expectedPatches_5_10[@]}"
-
-	elif [[ "$KERNEL_VER" == "v5.10" ]]; then
+	if [[ "$KERNEL_VER" == "v5.10" ]]; then
 		expectedPatches="${expectedPatches_cros_5_10[@]}"
 	elif [[ "$KERNEL_VER" == "v5.15" ]]; then
 		expectedPatches="${expectedPatches_cros_5_15[@]}"
@@ -624,18 +621,18 @@ test()
 	elif [[ "$KERNEL_VER" == "v6.12" ]]; then
 		expectedPatches="${expectedPatches_cros_6_12[@]}"
 
-	elif [[ "$KERNEL_VER" == "v5.10."* ]]; then
+	elif [[ "$KERNEL_VERSION" == "v5.10."* ]]; then
 		expectedPatches="${expectedPatches_5_10[@]}"
-	elif [[ "$KERNEL_VER" == "v5.15."* ]]; then
+	elif [[ "$KERNEL_VERSION" == "v5.15."* ]]; then
 		expectedPatches="${expectedPatches_5_15[@]}"
-	elif [[ "$KERNEL_VER" == "v6.1."* ]]; then
+	elif [[ "$KERNEL_VERSION" == "v6.1."* ]]; then
 		expectedPatches="${expectedPatches_6_1[@]}"
-	elif [[ "$KERNEL_VER" == "v6.6."* ]]; then
+	elif [[ "$KERNEL_VERSION" == "v6.6."* ]]; then
 		expectedPatches="${expectedPatches_6_6[@]}"
-	elif [[ "$KERNEL_VER" == "v6.12."* ]]; then
+	elif [[ "$KERNEL_VERSION" == "v6.12."* ]]; then
 		expectedPatches="${expectedPatches_6_12[@]}"
-	elif [[ "$KERNEL_VER" == "v6.15-"* ]]; then
-		expectedPatches="${expectedPatches_6_15[@]}"
+	elif [[ "$KERNEL_VERSION" == "v6.16-"* ]]; then
+		expectedPatches="${expectedPatches_6_16[@]}"
 
 	elif [[ "$KERNEL_VER" == "v6.8" ]]; then
 		expectedPatches="${expectedPatches_ubuntu_6_8[@]}"
@@ -652,11 +649,13 @@ test()
 
 	# start from fresh sources and kernel
 	prepareKernelAndDeploy $KERNEL_VER || exitError 2;
+	touch "$(buildDir $KERNEL_VERSION)/vmlinux"
+	touch "$(buildDir $KERNEL_VERSION)/Makefile"
 
 	echo "" >> "$srcDir/drivers/hid/hid-ids.h"
 
 	logStep -n "Check if changes in .h detects proper source files..."
-	out=$(dekuBuild --log -v)
+	out=$(dekuBuild --stdout -v)
 	local res=$?
 	[[ $res != 0 ]] && { echo "$out"; exitError 3; }
 
@@ -670,7 +669,7 @@ test()
 	logStep "OK"
 
 	logStep -n "Check if changes in .h file are properly handled..."
-	out=$(dekuBuild --log -v)
+	out=$(dekuBuild --stdout -v)
 	res=$?
 	[[ $res != 0 ]] && { echo "$out"; exitError 6; }
 	grep -q "No valid changes detected" <<< "$out" || { echo "$out"; echo "Fail"; exitError 7; }

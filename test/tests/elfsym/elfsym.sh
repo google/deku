@@ -6,6 +6,7 @@
 # Check that the generated 'patch.o' file contains the expected symbols
 # Test whether fastbuild produce the same file as using kbuild
 
+# DEPRECATED
 FILES=""
 DESCRIPTION="ELF symbols"
 . test/common.sh
@@ -25,7 +26,7 @@ checkElfStruct()
 	local fun=$3
 	local text=$4
     local kbuild=$5
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	local filename=$(filenameNoExt "$srcfile")
 	local modname="$(generateModuleName $srcfile)"

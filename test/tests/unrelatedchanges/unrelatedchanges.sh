@@ -18,7 +18,7 @@ inlineTest()
 	local discardedfuncs=$5
 	local modname="$(generateModuleName $file)"
 	local moduledir="$WORKDIR/$modname"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	appendToFunction "$srcDir/$file" $function "$text"
 	appendToFunction "$srcDir/$file" i9xx_update_cursor ";"

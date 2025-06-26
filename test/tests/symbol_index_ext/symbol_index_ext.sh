@@ -17,7 +17,7 @@ symbolIndexTest()
 	local kernelversion=$4
 	local modname="$(generateModuleName $file)"
 	local moduledir="$WORKDIR/$modname"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $kernelversion)
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 
@@ -36,8 +36,8 @@ main()
 {
 	MAIN_PATH=`dirname "$0"`
 
-	symbolIndexTest "net/bluetooth/mgmt.c" "stop_discovery" 1 $KERNEL_VER
-	# functionCallTest "fs/proc/proc_tty.c" "t_start" "wget -q --spider google.com; timeout 1 top" $KERNEL_VER
+	symbolIndexTest "net/bluetooth/mgmt.c" "stop_discovery" 1 $KERNEL_VERSION
+	# functionCallTest "fs/proc/proc_tty.c" "t_start" "wget -q --spider google.com; timeout 1 top" $KERNEL_VERSION
 	# cut -d' ' -f 3 ~/chromeos/chroot/home/mmaslanka/.cache/deku/build-linux-deku/System.map | sort | uniq -cd | sort -h
 }
 

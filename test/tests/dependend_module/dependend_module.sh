@@ -18,13 +18,13 @@ checkAndResolveDep()
 
 	local koPath="${file/".c"/".ko"}"
 	local text="pr_info(\"test\");"
-	local srcDir="$(sourceDir $KERNEL_VER)"
+	local srcDir="$(sourceDir $KERNEL_VERSION)"
 
 	logStep "Detect that $(basename $koPath) module is not loaded"
 	appendToFunction "$srcDir/$file" $func "$text"
 
 	[[ $CHROMEOS ]] && remoteSh "rmmod -f $(basename $koPath)"
-	out=$(dekuDeploy --log -v)
+	out=$(dekuDeploy --stdout -v)
 	local res=$?
 	[[ $res != $ERROR_DEPEND_MODULE_NOT_LOADED ]] && { echo "Invalid exit code: $res"; exit 1; }
 
@@ -37,7 +37,7 @@ checkAndResolveDep()
 	elif [[ $CHROMEOS ]]; then
 		remoteSh "modprobe $(filenameNoExt $koPath)"
 	else
-		copyToRemote "$(buildDir $KERNEL_VER)/$koPath" "/tmp/"
+		copyToRemote "$(buildDir $KERNEL_VERSION)/$koPath" "/tmp/"
 		remoteSh "insmod /tmp/$(basename $koPath)"
 	fi
 

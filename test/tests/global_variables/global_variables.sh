@@ -102,7 +102,7 @@ test()
 	local file="net/ipv4/tcp_ipv4.c"
 	local function="tcp_v4_connect"
 	local cmd="wget -q --spider google.com; wget -q --spider example.com"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	local expectedmsg=
 	local altExpecteDmsg=
@@ -126,14 +126,14 @@ test()
 
 	logStep "Checking if global variables are properly mapped"
 
-	buildKernelToLaunch || exitError 4
+	buildKernelToLaunch || exitDirtyError 4
 	runQemu
 
 	remoteSh $cmd
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 	clearLogs
-	dekuDeploy || exitError 5
+	dekuDeploy || exitDirtyError 5
 	sleep 1
 	local excpectMsg=
 	for i in {1..150}; do
@@ -145,7 +145,7 @@ test()
 		checkIfDmesgContains "$altExpecteDmsg2" > /dev/null 2>&1 && excpectMsg="$altExpecteDmsg2"
 	done
 	[[ "$excpectMsg" == "" ]] && excpectMsg="$expectedmsg"
-	checkIfDmesgContains "$excpectMsg" || exitError 6
+	checkIfDmesgContains "$excpectMsg" || exitDirtyError 6
 
 	logStep "OK"
 
@@ -155,9 +155,10 @@ test()
 	appendToFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect "$FunctionCodeReadMostly"
 
 	logStep -n "Remove all global variables and introduce new variables with extra annotations like __read_mostly... "
-	dekuBuild || { echo "Fail"; exitError 7; }
+	dekuBuild || { echo "Fail"; exitDirtyError 7; }
 
 	logStep "OK"
+	exitDirtyError 0
 
 	return 0
 }

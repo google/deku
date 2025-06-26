@@ -19,7 +19,7 @@ test()
 	local file2="drivers/gpu/drm/drm_atomic_uapi.c"
 	local function2="drm_atomic_plane_set_property"
 	local functionHeader2="static int drm_atomic_plane_set_property"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	prepareKernelAndDeploy $KERNEL_VERSION_5_15
 	runQemu

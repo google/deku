@@ -9,6 +9,7 @@
 #
 # Note: Seems it only work on chromeos
 
+# DEPRECATED
 FILES="net/ipv6/netfilter/nf_tproxy_ipv6.c net/sunrpc/svcsock.c"
 DESCRIPTION="multiple_func"
 . test/common.sh
@@ -16,7 +17,7 @@ DESCRIPTION="multiple_func"
 test()
 {
 	local text="pr_info(\"test\");"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	prepareKernelAndDeploy $KERNEL_VER +CONFIG_NF_SOCKET_IPV6 +CONFIG_NF_TPROXY_IPV6
 

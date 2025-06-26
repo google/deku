@@ -12,7 +12,7 @@ DESCRIPTION="Multi files"
 checkChangesFoKoFile()
 {
 	local koFile=$1
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	shift 1
 	for filefun in "$@"

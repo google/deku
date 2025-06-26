@@ -9,6 +9,7 @@ FILES=""
 DESCRIPTION="Disassembler all files in the kernel"
 . test/common.sh
 
+# TODO:
 # prepareKernelAndDeploy // leave this commit to avoid rebuilding the kernel for this test
 dissasembly()
 {

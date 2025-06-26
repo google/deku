@@ -12,13 +12,13 @@ DESCRIPTION="Filter symbols"
 filterTest()
 {
 	local file="net/ipv4/tcp_ipv4.c"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local ofile="$WORKDIR/patch_e9fa88a1_tcp_ipv4/patch.o"
 
 	appendToFunction "$srcDir/$file" "tcp_req_err" "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU tcp_req_err test\");"
 	appendToFunction "$srcDir/$file" "tcp_v4_md5_lookup" "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU tcp_v4_md5_lookup test\");"
 
-	out=$(dekuBuild --log -v) || exitError 1
+	out=$(dekuBuild --stdout -v) || exitError 1
 
 	readelf -a -W "$ofile" >> $LOG_FILE
 	grep "Modified function:" <<< $out | while read line
@@ -62,20 +62,20 @@ filterTest()
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" | grep -q "contains 2 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" | grep -q "contains 5 entries:" || exitError
-	elif [[ $KERNEL_VER == v6.11 || $KERNEL_VER == v6.12* || $KERNEL_VER == v6.14* ]]; then
+	elif [[ $KERNEL_VER == v6.11 || $KERNEL_VERSION == v6.12* || $KERNEL_VERSION == v6.14* ]]; then
 		# readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" | grep -q "contains 2 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" | grep -q "contains 5 entries:" || exitError
-	elif [[ $KERNEL_VER == v6.1.* ]]; then
+	elif [[ $KERNEL_VERSION == v6.1.* ]]; then
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" | grep -q "contains 2 entries:" || exitError
-	elif [[ $KERNEL_VER == v6.6.* ]]; then
+	elif [[ $KERNEL_VERSION == v6.6.* ]]; then
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" | grep -q "contains 2 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" && exitError
-	elif [[ $KERNEL_VER == v6.15-* ]]; then
+	elif [[ $KERNEL_VERSION == v6.16-* ]]; then
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" && exitError

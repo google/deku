@@ -16,7 +16,7 @@ functionCallTest()
 	local function=$2
 	local cmd=$3
 	local text="[$SCRIPT_NAME] DEKU $function test"
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 
 	logStep "Pre the $file..."
 	revertChanges
@@ -43,7 +43,7 @@ functionCallTest()
 
 test()
 {
-	local srcDir=$(sourceDir $KERNEL_VER)
+	local srcDir=$(sourceDir $KERNEL_VERSION)
 	local fairSched="kernel/sched/fair.c"
 	[[ -s "$srcDir/kernel/sched/fair_eevdf.c" ]] && fairSched="kernel/sched/fair_eevdf.c"
 
@@ -51,7 +51,7 @@ test()
 	functionCallTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "wget -q --spider google.com"
 	functionCallTest "fs/timerfd.c" "timerfd_triggered" "sleep 2; dmesg | grep -q timerfd_triggered || { grep -q CHROMEOS /etc/lsb-release && /usr/local/autotest/bin/autologin.py > /dev/null 2>&1; }"
 	functionCallTest "fs/readdir.c" "filldir64" "sleep 2"
-	if [[ $KERNEL_VER == v6.14* || $KERNEL_VER == v6.15* ]]; then
+	if [[ $KERNEL_VERSION == v6.14* || $KERNEL_VERSION == v6.16* ]]; then
 		functionCallTest "mm/vma.c" "mmap_region" "sleep 2"
 	else
 		functionCallTest "mm/mmap.c" "mmap_region" "sleep 2"
