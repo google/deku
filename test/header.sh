@@ -42,12 +42,13 @@ readonly CHROMEOS_KERNEL_VER="5_15"
 
 readonly SSHPARAMS_OPTIONS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPersist=300 -o BatchMode=yes"
 
+readonly KERNELS_DIR="$HOME/linux-trees"
 readonly TEST_CACHE_DIR="$HOME/.cache/deku"
-readonly ROOTFS_IMG=test/rootfs.img
+readonly ROOTFS_IMG=test/rootfs.qcow2
 
 readonly QEMU_SSH_KEY="test/testing_rsa"
 readonly CROS_SSH_KEY="${CROS_WORKDIR}/testing_rsa"
-readonly VM_SSH_KEY="test/testing_rsa"
+readonly VM_SSH_KEY="~/Downloads/quickemu/key"
 
 readonly QEMU_SSH_PORT="60023"
 readonly CROS_SSH_PORT="2244"
@@ -55,11 +56,11 @@ readonly VM_SSH_PORT="22220"
 
 readonly QEMU_SOURCE_DIR="$TEST_CACHE_DIR/linux"
 readonly CROS_SOURCE_DIR="/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$CHROMEOS_KERNEL_VER/source"
-readonly VM_SOURCE_DIR="/tmp/deku-vm-mount/linux-6.8.4"
+readonly VM_SOURCE_DIR="/tmp/deku-vm-mount/linux"
 
 readonly QEMU_BUILD_DIR="$TEST_CACHE_DIR/build-linux-deku"
 readonly CROS_BUILD_DIR="/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$CHROMEOS_KERNEL_VER"
-readonly VM_BUILD_DIR="/tmp/deku-vm-mount/linux-6.8.4"
+readonly VM_BUILD_DIR="/tmp/deku-vm-mount/linux"
 
 declare -g KERNEL_VERSION=$KERNEL_VERSION_DEFAULT_BASE
 

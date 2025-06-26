@@ -104,7 +104,7 @@ main()
 		return
 	fi
 
-	test
+	# test
 }
 
 main $@

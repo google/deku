@@ -49,7 +49,7 @@ test()
 	local cmd="CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com; CMD='cat /dev/uinput 2>/dev/null'; eval \$CMD; eval sudo \$CMD; sleep 0.1"
 	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernel $KERNEL_VER +CONFIG_INPUT_UINPUT
+	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT
 	runQemu
 
 	logStep "Check revert all changes by using empty livepatch module..."
@@ -61,9 +61,11 @@ test()
 	dekuDeploy || exitError $LINENO
 	isNotCumulativeModule || exitError $LINENO
 	git -C "$srcDir" restore net/ipv4/tcp_ipv4.c kernel/sched/core.c
-	dekuDeploy || exitError $LINENO
+	out=$(dekuDeploy --log -v) || exitError $LINENO
 	isCumulativeModule || exitError $LINENO
 	# workdirContainsOnly deku_00000000 || exitError $LINENO
+	grep -q "Reverting changes from net/ipv4/tcp_ipv4.c" <<< "$out" || exitError $LINENO
+	grep -q "Reverting changes from kernel/sched/core.c" <<< "$out" || exitError $LINENO
 
 	git -C "$srcDir" restore net/ipv4/tcp_ipv4.c kernel/sched/core.c
 	appendToFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect " "
@@ -104,11 +106,11 @@ test()
 	isCumulativeModule || exitError $LINENO
 	# workdirContainsOnly deku_00000000 || exitError $LINENO
 
-	prepareKernel $KERNEL_VER +CONFIG_INPUT_UINPUT
+	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT
 	runQemu
 
 	if [[ $VM_TEST ]]; then
-		remoteSh "cd linux-6.8.4; sudo insmod drivers/input/misc/uinput.ko"
+		remoteSh "cd linux; sudo insmod drivers/input/misc/uinput.ko"
 	else
 		copyToRemote "$BUILD_DIR/drivers/input/misc/uinput.ko" "/tmp/"
 		remoteSh "insmod /tmp/uinput.ko"

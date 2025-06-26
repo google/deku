@@ -1,4 +1,6 @@
 rootfs.img
+rootfs.qcow2
 testing_rsa
 logs
 pass_test
+monitor/__debug_bin888896174

@@ -1,0 +1,130 @@
+#container {height: 100%; width:100%; font-size: 0;}
+#left, #middle, #right {display: inline-block; *display: inline; zoom: 1; vertical-align: top; font-size: 12px;}
+#left { padding: 8pt;}
+#middle {width: 50%; padding: 8pt; text-align: left;}
+#right {width: 100%; background: yellow;}
+
+table {
+    font-size: 100%;
+    white-space: nowrap;
+    margin: 0;
+    border: none;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    border: 1px solid rgb(255, 255, 255);
+  }
+  table td,
+  table th {
+    border: 1px solid rgb(133, 133, 133);
+    padding: 0.5rem 1rem;
+  }
+  table thead  {
+    padding: 3px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    width: 25vw;
+    background-color: rgb(153, 27, 170);
+  }
+
+  table thead tr:nth-child(2) th {
+    transform: rotate(-0deg);
+    border:0;
+  }
+
+  table td {
+    padding: 4px 5px;
+    text-align: center;
+  }
+  
+  table tbody th {
+    font-weight: 100;
+    font-style: italic;
+    text-align: left;
+    position: relative;
+    background-color: rgb(153, 27, 170);
+  }
+  table tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+  }
+  table tbody td {
+  }
+  /* caption {
+    text-align: left;
+    padding: 0.25rem;
+    position: sticky;
+    left: 0;
+  } */
+
+  #tableHeadElement {
+    /* position: sticky; */
+    left: 0;
+    z-index: 3;
+  }
+
+  .tableStickLeftColumn {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+  }
+  
+  [role="region"][aria-labelledby][tabindex] {
+    width: 100%;
+    max-height: 98vh;
+    overflow: auto;
+  }
+  [role="region"][aria-labelledby][tabindex]:focus {
+    box-shadow: 0 0 0.5em rgba(122, 117, 117, 0.5);
+    outline: 0;
+  }
+
+
+.circle {
+  position: relative;
+  background: #8cc63e;
+  border-radius: 50%;
+  width: 18pt;
+  height: 18pt;
+}
+
+.checkmark {
+  position: absolute;
+  transform: rotate(45deg) translate(-50%, -50%);
+  left: 35%;
+  top: 45%;
+  height: 18pt/4;
+  width: 168pt/8;
+  border-bottom: 1pt solid white;
+  border-right: 1pt solid white;
+}
+
+.cellMenu {
+  width: 10pt;
+  height: 15pt;
+  background-image: radial-gradient(circle, rgb(199, 199, 199) 1px, transparent 2px);
+  background-size: 100% 33.33%;
+  align-self: flex-end;
+  opacity: 0;
+}
+
+.cellMenu:hover {
+  opacity: 1;
+}
+
+.testMenu {
+  position: absolute;
+  border: 1px solid white;
+  background-color: rgb(153, 27, 170);
+}
+
+.testMenuItem {
+  padding: 4pt 10pt;
+  cursor: pointer;
+}
+
+.testMenuItem:hover {
+  background-color: rgb(161, 45, 177);
+}

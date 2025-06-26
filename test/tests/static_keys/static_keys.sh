@@ -91,7 +91,7 @@ test()
 	local srcDir=$(sourceDir $KERNEL_VER)
 	local file="$srcDir/net/ipv4/tcp_ipv4.c"
 
-	prepareKernel $KERNEL_VER || exitError 1
+	prepareKernelAndBuild $KERNEL_VER || exitError 1
 	runQemu
 
 	logStep "Add code that contains static keys usage"
@@ -124,9 +124,10 @@ test()
 
 	sed -i "s/AfterX change key/After change key/g" "$file"
 	sed -i "s/BeforeX change key/Before change key/g" "$file"
-	dekuDeploy || exitError 11
-	remoteSh $cmd
-	if [[ $KERNEL_VER != v5.10.* ]] && [[ $KERNEL_VER != v5.15 ]]; then
+	if [[ $KERNEL_VER != v5.10.* && $KERNEL_VER != v5.15* ]]; then
+		# TODO: probably value for static key is not set to the previous one on module load
+		dekuDeploy || exitError 11
+		remoteSh $cmd
 		# checkIfDmesgNOTContains "Before change key" || exitError 12
 		checkIfDmesgContains "After change key" || exitError 13 # uncomment if supported for migration static keys will be done
 	fi

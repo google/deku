@@ -16,10 +16,11 @@ DESCRIPTION="multiple_func"
 test()
 {
 	local text="pr_info(\"test\");"
+	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernel $KERNEL_VER +CONFIG_NF_SOCKET_IPV6 +CONFIG_NF_TPROXY_IPV6
+	prepareKernelAndBuild $KERNEL_VER +CONFIG_NF_SOCKET_IPV6 +CONFIG_NF_TPROXY_IPV6
 
-	git -C "$SOURCE_DIR" apply "`pwd`/$MAIN_PATH/5_10/test.patch" 2>/dev/null
+	git -C "$srcDir" apply "`pwd`/$MAIN_PATH/5_10/test.patch" 2>/dev/null
 
 	dekuBuild || exit 1
 

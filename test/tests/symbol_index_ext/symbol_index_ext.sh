@@ -17,10 +17,9 @@ symbolIndexTest()
 	local kernelversion=$4
 	local modname="$(generateModuleName $file)"
 	local moduledir="$WORKDIR/$modname"
+	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernel $kernelversion
-
-	appendToFunction "$SOURCE_DIR/$file" $function "printk(KERN_INFO \"\");"
+	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 
 	dekuBuild || exit 1
 

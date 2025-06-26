@@ -5,7 +5,7 @@
 #
 # Check that the found index for the symbols is correctly selected
 
-FILES="net/ipv4/arp.c net/ipv4/tcp_ipv4.c net/ethernet/eth.c fs/open.c fs/readdir.c mm/mmap.c"
+FILES="net/ipv4/arp.c net/ipv4/tcp_ipv4.c net/ethernet/eth.c fs/open.c fs/readdir.c mm/mmap.c mm/vma.c"
 DESCRIPTION="Symbol index"
 . test/common.sh
 
@@ -57,7 +57,11 @@ test()
 	addTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com"
 	addTest "fs/open.c" "chmod_common" "rm -f /tmp/a; touch /tmp/a; chmod 644 /tmp/a"
 	addTest "fs/readdir.c" "filldir64" "sleep 2"
-	[[ $VM_TEST == "" ]] && addTest "mm/mmap.c" "mmap_region" "sleep 2"
+	if [[ $KERNEL_VER == v6.14* ]]; then
+		addTest "mm/vma.c" "mmap_region" "sleep 2"
+	else
+		[[ $VM_TEST == "" ]] && addTest "mm/mmap.c" "mmap_region" "sleep 2"
+	fi
 
 	local count=${#files[@]}
 	for (( i=0; i<count; i++ ))

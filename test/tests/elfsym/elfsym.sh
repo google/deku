@@ -25,6 +25,7 @@ checkElfStruct()
 	local fun=$3
 	local text=$4
     local kbuild=$5
+	local srcDir=$(sourceDir $KERNEL_VER)
 
 	local filename=$(filenameNoExt "$srcfile")
 	local modname="$(generateModuleName $srcfile)"
@@ -39,9 +40,9 @@ checkElfStruct()
                            "_$filename.ko" "._$filename.ko.cmd" "_$filename.mod" "_$filename.mod.c" "._$filename.mod.cmd" "_$filename.mod.o"
                            "._$filename.mod.o.cmd" "._$filename.o.cmd")
 
-	prepareKernel $KERNEL_VER
+	prepareKernelAndBuild $KERNEL_VER
 
-	appendToFunction "$SOURCE_DIR/$srcfile" $fun "$text"
+	appendToFunction "$srcDir/$srcfile" $fun "$text"
 
     if [[ $kbuild == 1 ]]; then
         local cmdfilepath=$(cmdBuildFilePath $srcfile)

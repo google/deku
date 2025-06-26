@@ -154,7 +154,7 @@ expectedPatches_6_12=(
 	patch_f3cfb068_hid_redragon
 )
 
-expectedPatches_upstream=(
+expectedPatches_6_14=(
 	patch_0711c614_hid_monterey
 	patch_147bf8e3_hid_sunplus
 	patch_1eee55b7_hid_petalynx
@@ -348,39 +348,6 @@ expectedPatches_cros_6_12=(
 	"patch_e2cd0e78_hid_jabra"
 )
 
-expectedPatches_cros_upstream=(
-	"patch_2f40cdee_hid_microsoft"
-	"patch_3f58b910_hid_magicmouse"
-	"patch_9a3bc6b9_hid_nintendo"
-	"patch_13ce2b29_hid_generic"
-	"patch_31d6ba2d_i2c_hid_core"
-	"patch_41e1d08e_hid_logitech_dj"
-	"patch_65c2c41d_hid_quickstep"
-	"patch_85afc72e_hid_apple"
-	"patch_86e1e138_hid_wiimote_core"
-	"patch_359d05e2_hid_lg_g15"
-	"patch_567f23f1_hid_plantronics"
-	"patch_643ca254_hid_holtek_mouse"
-	"patch_817a5f23_hid_holtek_kbd"
-	"patch_858f5e18_hid_lg"
-	"patch_953fabed_hid_rmi"
-	"patch_4659d305_hid_primax"
-	"patch_9560d2f9_hid_google_hammer"
-	"patch_878339b2_hid_led"
-	"patch_a1df7423_hid_cherry"
-	"patch_a12c7f34_i2c_hid_dmi_quirks"
-	"patch_bf5f5191_hid_multitouch"
-	"patch_bf693bf0_hid_input"
-	"patch_c2c62619_hid_kensington"
-	"patch_cb22b47d_hid_holtekff"
-	"patch_ce0ce2c3_hid_quirks"
-	"patch_d2cfff4b_hid_chicony"
-	"patch_d4dd7fa8_hid_core"
-	"patch_d8f8cf00_hid_sony"
-	"patch_d84909f5_hid_logitech_hidpp"
-	"patch_e2cd0e78_hid_jabra"
-)
-
 expectedPatches_ubuntu_6_8=(
 	"patch_015373ec_hid_macally"
 	"patch_4e857db3_hid_roccat_koneplus"
@@ -529,8 +496,6 @@ test()
 		expectedPatches="${expectedPatches_cros_6_6[@]}"
 	elif [[ "$KERNEL_VER" == "v6.12" ]]; then
 		expectedPatches="${expectedPatches_cros_6_12[@]}"
-	elif [[ "$KERNEL_VER" == "upstream" ]]; then
-		expectedPatches="${expectedPatches_cros_upstream[@]}"
 
 	elif [[ "$KERNEL_VER" == "v5.10."* ]]; then
 		expectedPatches="${expectedPatches_5_10[@]}"
@@ -542,8 +507,8 @@ test()
 		expectedPatches="${expectedPatches_6_6[@]}"
 	elif [[ "$KERNEL_VER" == "v6.12."* ]]; then
 		expectedPatches="${expectedPatches_6_12[@]}"
-	elif [[ "$KERNEL_VER" == "origin/master" ]]; then
-		expectedPatches="${expectedPatches_upstream[@]}"
+	elif [[ "$KERNEL_VER" == "v6.14-"* ]]; then
+		expectedPatches="${expectedPatches_6_14[@]}"
 
 	elif [[ "$KERNEL_VER" == "v6.8" ]]; then
 		expectedPatches="${expectedPatches_ubuntu_6_8[@]}"
@@ -556,9 +521,8 @@ test()
 		exitError 1;
 	fi
 
-
 	# start from fresh sources and kernel
-	prepareKernel $KERNEL_VER || exitError 2;
+	prepareKernelAndBuild $KERNEL_VER || exitError 2;
 
 	echo "" >> "$srcDir/drivers/hid/hid-ids.h"
 

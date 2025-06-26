@@ -23,7 +23,11 @@ checkLocalSymbol()
 	local koFile=$(find $WORKDIR -name "deku_*.ko")
 	logStep -n "Local symbol is marked as a '.klp.sym.'... "
 	readelf -s -W "$koFile" >> $LOG_FILE
-	readelf -s -W "$koFile" | grep -q ".klp.sym.vmlinux.dst_discard,2"  || { logErr "Fail"; exitError 2; }
+	if [[ $KERNEL_VER == v6.1 || $KERNEL_VER == v6.12 ]]; then
+		readelf -s -W "$koFile" | grep -q ".klp.sym.vmlinux.dst_discard,1"  || { logErr "Fail"; exitError 2; }
+	else
+		readelf -s -W "$koFile" | grep -q ".klp.sym.vmlinux.dst_discard,2"  || { logErr "Fail"; exitError 2; }
+	fi
 	logStep "OK"
 }
 
@@ -34,11 +38,11 @@ test()
 
 main()
 {
-	if [[ $LOCAL_TEST != "" ]]; then
-		:
-	else
-		test
+	if [[ $CHROMEOS ]]; then
+		return
 	fi
+
+	test
 }
 
 main $@

@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+	<head>
+		<title>Tests</title>
+		<script src="webui.js"></script>
+		<script src="script.js"></script>
+		<style>
+			body {
+				background: linear-gradient(to left, #36265a, #654da9);
+				color: AliceBlue;
+				font: 16px sans-serif;
+				text-align: center;
+				margin-top: 10px;
+			}
+			button {
+				margin: 5px 0 10px;
+			}
+		</style>
+		<script>
+			function runTestOnAgent(agent, testName, system, kernel)
+			{
+				webui.scheduleTestOnAgent(agent + " " + testName + " " + system + " " + kernel);
+			}
+		</script>
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body onload="myFunction()">
+		<button id="StartButton">Start tests</button>
+		<br>
+		<div id="container">
+			<div id="left">Agents:</div>
+			<div id="middle"><div id="agents"></div></div>
+			<div id="right"></div>
+		</div>
+
+
+		<div role="region" aria-labelledby="caption" tabindex="0">
+			<table>
+			  <thead>
+				<tr id="zz">
+				  <th rowspan="2" id="tableHeadElement">Test</th>
+				  <!-- <th>1</th>
+				  <th>2</th>
+				  <th>3</th>
+				  <th>4</th>
+				  <th>5</th>
+				  <th>6</th>
+				  <th>7</th> -->
+				</tr>
+				<tr id="kernelVersions">
+					<!-- <th>1</th>
+					<th>2</th>
+					<th>3</th>
+					<th>4</th>
+					<th>5</th>
+					<th>6</th>
+					<th>7</th> -->
+				</tr>
+			  </thead>
+			  <tbody>
+				<!-- <tr>
+					<th>Toronto Blue Jays</th>
+					<th>1</th>
+					<th>2</th>
+					<th>3</th>
+					<th>4</th>
+					<th>5</th>
+					<th>6</th>
+					<th>7</th>
+				  </tr> -->
+				<!-- <tr>
+				  <th>Toronto Blue Jays</th>
+				  <td>0</td>
+				  <td>2</td>
+				  <td>1</td>
+				  <td>1</td>
+				  <td>3</td>
+				  <td>3</td>
+				  <td>2</td>
+				  <td>0</td>
+				  <td>1</td>
+				  <td>13</td>
+				</tr>
+				<tr>
+				  <th>Boston Red Sox</th>
+				  <td>0</td>
+				  <td>1</td>
+				  <td>2</td>
+				  <td>2</td>
+				  <td>2</td>
+				  <td>4</td>
+				  <td>2</td>
+				  <td>4</td>
+				  <td>2</td>
+				  <td>19</td>
+				</tr>
+				<tr>
+				  <th>Chicago Cubs</th>
+				  <td>1</td>
+				  <td>2</td>
+				  <td>4</td>
+				  <td>0</td>
+				  <td>3</td>
+				  <td>4</td>
+				  <td>4</td>
+				  <td>0</td>
+				  <td>4</td>
+				  <td>22</td>
+				</tr>
+				<tr>
+				  <th>Philadelphia Phillies</th>
+				  <td>2</td>
+				  <td>4</td>
+				  <td>1</td>
+				  <td>2</td>
+				  <td>3</td>
+				  <td>4</td>
+				  <td>2</td>
+				  <td>4</td>
+				  <td>3</td>
+				  <td>25</td>
+				</tr>
+				<tr>
+				  <th>Chicago White Sox</th>
+				  <td>2</td>
+				  <td>3</td>
+				  <td>0</td>
+				  <td>3</td>
+				  <td>4</td>
+				  <td>4</td>
+				  <td>1</td>
+				  <td>1</td>
+				  <td>1</td>
+				  <td>19</td>
+				</tr>
+				<tr>
+				  <th>San Diego Padres</th>
+				  <td>3</td>
+				  <td>3</td>
+				  <td>3</td>
+				  <td>4</td>
+				  <td>2</td>
+				  <td>3</td>
+				  <td>2</td>
+				  <td>2</td>
+				  <td>4</td>
+				  <td>26</td>
+				</tr> -->
+			  </tbody>
+			</table>
+		  </div>
+	</body>
+</html>

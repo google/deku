@@ -1,0 +1,11 @@
+.klp.sym.vmlinux._rs.2,1
+.klp.sym.vmlinux.hpet_alarm_time,0
+.klp.sym.vmlinux.hpet_default_delta,0
+.klp.sym.vmlinux.hpet_pie_count,0
+.klp.sym.vmlinux.hpet_pie_delta,0
+.klp.sym.vmlinux.hpet_pie_limit,0
+.klp.sym.vmlinux.hpet_prev_update_sec,0
+.klp.sym.vmlinux.hpet_rtc_flags,0
+.klp.sym.vmlinux.hpet_t1_cmp,0
+.klp.sym.vmlinux.hpet_virt_address,0
+.klp.sym.vmlinux.irq_handler,0

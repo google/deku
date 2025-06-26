@@ -22,7 +22,7 @@ checkTracepointString()
 	dekuBuild || exitError 1
 	local koFile=$(find $WORKDIR -name "deku_*.ko")
 	readelf -s -W "$koFile" >> $LOG_FILE
-	if [[ $VM_TEST == "" ]]; then
+	if [[ $CHROMEOS ]]; then
 		readelf -s -W "$koFile" | grep -q "s2idle_enter.___tp_str" || { logErr "Fail"; exitError 2; }
 	fi
 	readelf -s -W "$koFile" | grep -e "__tracepoint_str" | grep -q "SECTION LOCAL" || { logErr "Fail"; exitError 3; }
@@ -31,8 +31,6 @@ checkTracepointString()
 
 test()
 {
-	prepareKernel $KERNEL_VERSION_5_15 llvm
-
 	checkTracepointString "kernel/power/suspend.c" "suspend_devices_and_enter"
 }
 

@@ -9,6 +9,7 @@
 
 . test/header.sh
 
+ARM64=
 REMOTE_OUT=""
 QEMU_PID=0
 CURRENT_CROS_KERNEL_VERSION=
@@ -76,7 +77,8 @@ export -f logStep
 filenameNoExt()
 {
 	local file=$1
-	./deku filenameNoExt "$file"
+	file=$(basename "$file")
+	echo ${file%.*}
 }
 export -f filenameNoExt
 
@@ -147,10 +149,16 @@ waitForSystemBootUp()
 		if [[ $VM_TEST != "" ]]; then
 			[ $(expr $i % 15) == 0 ] && logInfo "Waiting for VM..."
 
-			ssh marek@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "exit 0"
+			ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "exit 0"
 			if [[ $? == 0 ]]; then
 				remoteSh "uname -a"
-				find /tmp/deku-vm-mount -mindepth 1 -maxdepth 1 | read || sshfs -p $SSH_PORT $SSHPARAMS -o idmap=user -o cache=no marek@localhost: /tmp/deku-vm-mount
+				find /tmp/deku-vm-mount -mindepth 1 -maxdepth 1 | read || sshfs -p $SSH_PORT $SSHPARAMS -o idmap=user -o cache=no test@localhost: /tmp/deku-vm-mount
+				sync
+				sleep 0.5
+				find /tmp/deku-vm-mount -mindepth 1 -maxdepth 1 | read || continue
+				copyToRemote test/update_grub.sh update_grub.sh
+				copyToRemote test/files/vm-ubuntu-init.sh vm-ubuntu-init.sh
+				remoteSh "bash vm-ubuntu-init.sh"
 			else
 				false
 			fi
@@ -159,7 +167,7 @@ waitForSystemBootUp()
 			ssh -i /mnt/host/source/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 -q exit
 		else
 			[ $(expr $i % 15) == 0 ] && logInfo "Waiting for QEMU..."
-			ssh root@localhost -p $QEMU_SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "rm -rf /var/log; exit"
+			timeout --signal=SIGKILL 10 ssh root@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "rm -rf /var/log; exit"
 		fi
 
 		[[ $? == 0 ]] && return 0
@@ -171,26 +179,35 @@ waitForSystemBootUp()
 
 runQemu()
 {
-	local KERNEL_IMAGE="$BUILD_DIR/arch/x86/boot/bzImage"
-	local cmdline="console=ttyS0 root=/dev/sda rw"
+	local kernelVer=$1
+	local buildDir=$BUILD_DIR
+	[[ $kernelVer != "" ]] && buildDir=$(buildDir $kernelVer)
+	local KERNEL_IMAGE="$buildDir/arch/x86/boot/bzImage"
+	local cmdline="console=ttyS0 root=/dev/vda rw"
 	local extraparams=
 	local qemuexec="qemu-system-x86_64"
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		return
 	elif [[ $VM_TEST != "" ]]; then
-		ssh marek@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "exit 0"
-		find /tmp/deku-vm-mount -mindepth 1 -maxdepth 1 | read || sshfs -p $SSH_PORT $SSHPARAMS -o idmap=user -o cache=no marek@localhost: /tmp/deku-vm-mount
-		[[ $? == 0 ]] && return
+		timeout --signal=SIGKILL 5 ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "ls -l"
+		if [[ $? == 0 ]]; then
+			ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "sudo reboot"
+			waitForSystemBootUp && return
+		fi
 
 		for x in {1..3}; do
-			killall -q -9 $qemuexec
+			fuser -k -n tcp $SSH_PORT
 			pushd ~/Downloads/quickemu > /dev/null
-			./quickemu --vm ubuntu-24.04.conf
+			./quickemu --vm ubuntu-24.04.conf --ssh-port $SSH_PORT --public-dir ~/linux-trees --status-quo
 			popd > /dev/null
+			sleep 10
 			waitForSystemBootUp && break
 			logInfo "Seems that VM hung on launching. Restarting..."
 		done
+
+		rsync -rlt ../deku /tmp/deku-vm-mount/ --exclude "workdir_*" --exclude ".git" --exclude "test/rootfs.img" --exclude "test/" --exclude "test.mk" --exclude "test-*" --exclude "deku_*"
+		remoteShOut "cd deku/; make clean; make"
 		return
 	elif [[ $CHROMEOS != "" ]]; then
 		remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1
@@ -201,7 +218,7 @@ runQemu()
 	[[ "$TEST_ON_CHROMEBOOK" ]] && return
 
 	if [[ $ARM64 != "" ]]; then
-		KERNEL_IMAGE="$BUILD_DIR/arch/arm64/boot/Image"
+		KERNEL_IMAGE="$buildDir/arch/arm64/boot/Image"
 		cmdline="console=ttyAMA0 root=/dev/vda rw"
 		extraparams="-M virt -cpu cortex-a72"
 		qemuexec="qemu-system-aarch64"
@@ -213,7 +230,7 @@ runQemu()
 	fi
 	local logFile=$(logFile qemu)
 	# TODO: Check if another qemu instance is not running
-	killall -q -9 $qemuexec
+	fuser -k -n tcp $SSH_PORT
 	local enablekvm="-enable-kvm"
 	timeout 0.5 $qemuexec -nographic -enable-kvm > /dev/null 2>&1
 	[[ $? == 1 ]] && enablekvm=
@@ -221,16 +238,23 @@ runQemu()
 	for x in {1..3}; do
 		# Wait a bit of time before start next instance of qemu
 		sleep 0.5
-		$qemuexec -kernel "$KERNEL_IMAGE" -drive format=raw,file="$ROOTFS_IMG" \
-				-append "$cmdline" -serial file:$logFile -s -smp 4 -m 256 \
+		while true; do
+			kill -9 $(ps aux | grep "$SSH_PORT" | grep "qemu" | cut -d' ' -f2) 2>/dev/null
+			sleep 0.2
+			ps aux | grep "$SSH_PORT" | grep -q "qemu" && \
+				logDebug "Waiting for close previous qemu instance" || break
+			sleep 0.8
+		done
+		logInfo "Starting QEMU..."
+		$qemuexec -kernel "$KERNEL_IMAGE" -drive if=virtio,format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
+				-append "$cmdline" -serial file:$logFile -smp 4 -m 256 \
 				-device virtio-net-pci,netdev=net0,romfile="" \
 				-vnc none -netdev type=user,id=net0 \
-				-nic "user,hostfwd=tcp::$QEMU_SSH_PORT-:22" \
+				-nic "user,hostfwd=tcp::$SSH_PORT-:22" \
 				-daemonize $enablekvm $extraparams
 		QEMU_PID=$!
 		waitForSystemBootUp && return
 		logInfo "Seems that QEMU hung on launching. Restarting..."
-		killall -q -9 $qemuexec
 	done
 }
 export -f runQemu
@@ -245,7 +269,7 @@ remoteSh()
 	elif [[ $CHROMEOS != "" ]]; then
 		REMOTE_OUT=$(ssh -i /mnt/host/source/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=error "$@")
 	elif [[ $VM_TEST != "" ]]; then
-		REMOTE_OUT=$(ssh marek@localhost -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
+		REMOTE_OUT=$(ssh test@localhost -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
 	else
 		REMOTE_OUT=$(ssh root@localhost -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
 	fi
@@ -264,6 +288,19 @@ remoteShOut()
 	return $ret
 }
 export -f remoteShOut
+
+runCmd()
+{
+	if [[ $LOCAL_TEST != "" ]]; then
+		bash -c "$@" | tee -a $LOG_FILE
+	elif [[ $CHROMEOS != "" ]]; then
+		bash -c "$@" | tee -a $LOG_FILE
+	elif [[ $VM_TEST != "" ]]; then
+		remoteShOut "cd deku; $@"
+	else
+		docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest $@ | tee -a $LOG_FILE
+	fi
+}
 
 copyToRemote()
 {
@@ -292,53 +329,80 @@ export -f getLocalKernelDir
 
 sourceDir()
 {
-	local kernelversion=$1
+	local kernelVersion=$1
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		getLocalKernelDir
 	elif [[ $CHROMEOS != "" ]]; then
-		[[ $kernelversion != "" ]] && { echo "/mnt/host/source/src/third_party/kernel/$kernelversion" ; return; }
+		[[ $kernelVersion != "" ]] && { echo "/mnt/host/source/src/third_party/kernel/$kernelVersion" ; return; }
 		local kerndir=`find "$basedir/build/${CROS_BOARD}/var/db/pkg/sys-kernel/" -type f -name "chromeos-kernel-*"`
 		kerndir=`basename $kerndir`
 		kerndir=${kerndir%-9999*}
 		local builddir="$basedir/build/${CROS_BOARD}/var/cache/portage/sys-kernel/$kerndir"
 		readlink "$builddir/source"
-	else
+	elif [[ $VM_TEST != "" ]]; then
 		echo $SOURCE_DIR
+	elif [[ $ARM64 != "" ]]; then
+		echo "$KERNELS_DIR/arch64"
+	else
+		echo $KERNELS_DIR/$kernelVersion
 	fi
 }
 export -f sourceDir
 
 buildDir()
 {
-	local kernelversion=$1
+	local kernelVersion=$1
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		getLocalKernelDir
 	elif [[ $CHROMEOS != "" ]]; then
-		[[ $kernelversion != "" ]] && { echo "/mnt/host/source/src/third_party/kernel/$kernelversion" ; return; }
+		[[ $kernelVersion != "" ]] && { echo "/mnt/host/source/src/third_party/kernel/$kernelVersion" ; return; }
 		local kerndir=`find "$basedir/build/${CROS_BOARD}/var/db/pkg/sys-kernel/" -type f -name "chromeos-kernel-*"`
 		kerndir=`basename $kerndir`
 		kerndir=${kerndir%-9999*}
 		local builddir="$basedir/build/${CROS_BOARD}/var/cache/portage/sys-kernel/$kerndir"
 		echo "$builddir"
-	else
+	elif [[ $VM_TEST != "" ]]; then
 		echo $BUILD_DIR
+	else
+		local srcDir=$(sourceDir $kernelVersion)
+		echo ${srcDir%/*}/build-${srcDir##*/}
 	fi
 }
 export -f buildDir
 
 prepareKernelSources()
 {
+	local kernelVersion=$1
+	local srcDir=$(sourceDir $kernelVersion)
+
 	[[ "$TEST_ON_CHROMEBOOK" || "$CHROMEOS" || "$LOCAL_TEST" ]] && return
 
 	if [[ $VM_TEST != "" ]]; then
-		remoteSh "git clone -b master https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble linux-deku-test"
+		# remoteSh "git clone -b master https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble linux-deku-test"
 		return
 	elif [[ $ARM64 != "" ]]; then
-		git clone https://github.com/madvenka786/linux.git "$SOURCE_DIR"
+		git clone https://github.com/madvenka786/linux.git "$srcDir"
 	else
-		git clone git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git "$SOURCE_DIR"
+		# git clone git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git "$SOURCE_DIR"
+		# versionShort=
+		# versionLong=${kernelVersion}
+		# if [[ $kernelVersion == "origin/master" ]]; then
+		# 	versionShort="latest"
+		# else if [[ $kernelVersion == v*.*.* ]]; then
+		# 	# versionShort=${kernelVersion%.*}
+		# 	versionShort=${kernelVersion}
+		# else
+		# 	versionShort=${kernelVersion}
+		# 	versionLong=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | grep -F ${versionShort}. | tail -n 1)
+		# fi
+		# git -C $KERNELS_DIR/linux-stable archive --format=tar $versionLong | tar -x -C /kernel/$versionShort
+		mkdir $srcDir
+		git -C $KERNELS_DIR/linux-stable archive --format=tar $kernelVersion | tar -x -C $srcDir
+		git -C $srcDir init
+		git -C $srcDir add "*"
+		git -C $srcDir commit --no-verify -m "Initial commit"
 	fi
 	mkdir -p "$BUILD_DIR"
 }
@@ -442,6 +506,8 @@ buildKernel()
 {
 	local extraparams=$1
 	local logFile=$(logFile build)
+	local srcDir=$(sourceDir $KERNEL_VER)
+	local buildDir=$(buildDir $KERNEL_VER)
 
 	[[ "$TEST_ON_CHROMEBOOK" ]] && return
 
@@ -463,27 +529,23 @@ buildKernel()
 		# remoteShOut "yes '' | make $extraparams -C linux-6.8.4 oldconfig" >> $logFile 2>&1
 		local cmd="
 find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;
-make $extraparams -C linux-6.8.4 bindeb-pkg -j\$(nproc) 2>&1;
-sleep 1;
-sync;
+time make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
 ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
 	>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
 	exit 1;
 };
-sudo apt install ./linux-image-*_amd64.deb ./linux-headers-*_amd64.deb 2>&1;
-sudo ./update_grub.sh 2>&1;
-sudo reboot;
+sudo apt install -y --allow-downgrades ./linux-image-*_amd64.deb ./linux-headers-*_amd64.deb 2>&1;
+sudo ./update_grub.sh;
+sudo ./update_grub.sh test;
 		"
 		remoteShOut "$cmd" > $logFile || { logErr "Fail to build kernel"; return 1; }
-		waitForSystemBootUp || { logErr "VM didn't bootup"; return 2; }
-		remoteSh "sudo sysctl -w kernel.dmesg_restrict=0"
 		return
 	fi
 
 	logInfo "Building the kernel..."
-	rm -f "$BUILD_DIR/vmlinux"
-	yes "" | make $extraparams -C "$SOURCE_DIR" O="$BUILD_DIR" oldconfig > $logFile 2>&1
-	make $extraparams -C "$SOURCE_DIR" O="$BUILD_DIR" -j`nproc` > $logFile 2>&1
+	# rm -f "$buildDir/vmlinux"
+	yes "" | make $extraparams -C "$srcDir" O="$buildDir" oldconfig > $logFile 2>&1
+	docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 }
 export -f buildKernel
 
@@ -506,6 +568,9 @@ prepareKernel()
 	local version=$1
 	local usellvm=$2
 	local extraparams=
+	local srcDir=$(sourceDir $version)
+	local buildDir=$BUILD_DIR
+	[[ $version != "" ]] && buildDir=$(buildDir $version)
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		local kernelDir=$(getLocalKernelDir)
@@ -514,34 +579,68 @@ prepareKernel()
 	elif [[ $CHROMEOS == "" ]]; then
 		[[ $ARM64 != "" ]] && version="orc_v3"
 
-		if [[ "$SOURCE_DIR" == "" || ! -d "$SOURCE_DIR" ]]; then
-			logErr "Can't find kernel sources dir $SOURCE_DIR"
+		if [[ "$srcDir" == "" || ! -d "$srcDir" ]]; then
+			logErr "Can't find kernel sources dir $srcDir"
 			exit 1
 		fi
 
 		if [[ $VM_TEST != "" ]]; then
-			remoteSh "git -C linux-6.8.4 reset --hard"
+			# remoteSh "git -C linux-6.8.4 reset --hard"
 			local tag=
 			if [[ $version == v6.11 ]]; then
-				tag="Ubuntu-6.11.0-13.14"
+				tag="Ubuntu-hwe-6.11-6.11.0-17.17_24.04.2"
 			else
 				tag="Ubuntu-6.8.0-49.49"
 			fi
-			local currentTag=$(remoteShOut git -C linux-6.8.4 describe --exact-match --tags)
-			[[ $currentTag != $tag ]] && remoteSh git -C linux-6.8.4 checkout "$tag"
-			remoteSh 'yes "" | make -C linux-6.8.4 oldconfig'
+			srcDir="\$HOME/linux"
+			local currentTag=$(remoteShOut git -C $srcDir describe --exact-match --tags)
+			[[ "$currentTag" != "$tag" ]] && echo "Remove old linux dir" && remoteSh "rm -rf $srcDir; mkdir $srcDir"
+			local cmd="
+if [ -z \"\$(ls -A $srcDir)\" ]; then
+	echo 'Prepare kernel from $tag...';
+	mkdir -p $srcDir;
+	time GIT_INDEX_FILE=/tmp/git.index git --git-dir=\$HOME/linux-trees/ubuntu/.git --work-tree=$srcDir restore --source=$tag -- . &&
+	cd $srcDir &&
+	time git init 2>/dev/null &&
+	time git add \"*\" >/dev/null &&
+	time git commit --no-verify -m 'Initial commit' >/dev/null &&
+	git tag $tag;
+else
+	cd $srcDir;
+	echo 'Reset kernel dir';
+	git clean -d -f;
+	git reset --hard;
+fi;
+cd $srcDir;
+make kernelversion;
+cp -v /boot/config-\$(uname -r) .config;
+yes '' | make oldconfig > /dev/null;
+scripts/config --disable DEBUG_INFO;
+scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT;
+scripts/config --disable DEBUG_INFO_DWARF4;
+scripts/config --disable DEBUG_INFO_DWARF5;
+scripts/config --enable DEBUG_INFO_NONE;
+scripts/config --disable SYSTEM_TRUSTED_KEYS;
+scripts/config --disable SYSTEM_REVOCATION_KEYS;
+scripts/config --set-str CONFIG_SYSTEM_TRUSTED_KEYS '';
+scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
+"
+			remoteShOut "$cmd" || { logErr "Fail to prepare kernel"; return 1; }
+
 		else
-			git -C "$SOURCE_DIR" reset --hard
-			git -C "$SOURCE_DIR" clean -d -f
+			git -C "$srcDir" reset --hard
+			git -C "$srcDir" clean -d -f
 		fi
 
 		[[ "$TEST_ON_CHROMEBOOK" ]] && return
 		if [[ $VM_TEST == "" ]]; then
-			git -C "$SOURCE_DIR" checkout $version
+			git -C "$srcDir" reset --hard
+			git -C "$srcDir" clean -d -f
 
 			[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
-			make $extraparams -C "$SOURCE_DIR" O="$BUILD_DIR" defconfig >/dev/null
-			sed -i s/=m/=y/g "$BUILD_DIR/.config"
+			[[ $version != "" ]] && export KERNEL_VER=$version
+			make $extraparams -C "$srcDir" O="$buildDir" defconfig >/dev/null
+			sed -i s/=m/=y/g "$buildDir/.config"
 			enableKernelConfig FRAME_POINTER_VALIDATION
 			enableKernelConfig FTRACE
 			enableKernelConfig KALLSYMS_ALL
@@ -570,9 +669,18 @@ prepareKernel()
 		fi
 	done
 
-	buildKernel "$extraparams"
 }
 export -f prepareKernel
+
+prepareKernelAndBuild()
+{
+	local usellvm=$2
+	local extraparams=
+	[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
+	prepareKernel $@
+	buildKernel "$extraparams"
+}
+export -f prepareKernelAndBuild
 
 initDEKU()
 {
@@ -662,12 +770,13 @@ dekuBuild()
 					 livepatch 2>&1)
 	elif [[ $VM_TEST != "" ]]; then
 		out=$(remoteShOut "cd deku; ./deku --workdir=workdir_test \
-					 --builddir=../linux-6.8.4 \
+					 --builddir=../linux \
 					 $@ \
 					 livepatch 2>&1")
 	else
-		out=$(./deku --workdir="$WORKDIR" --ignore_cros=1 \
-					 --builddir="${BUILD_DIR}" \
+		out=$(docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest \
+			./deku -v --workdir="$WORKDIR" \
+					 --builddir="/kernel/${BUILD_DIR##*/}" \
 					 $@ \
 					 livepatch 2>&1)
 	fi
@@ -700,13 +809,17 @@ dekuDeploy()
 					 $@ 2>&1)
 	elif [[ $VM_TEST != "" ]]; then
 		out=$(remoteShOut "cd deku; ./deku --workdir=workdir_test \
-					 --builddir=../linux-6.8.4 \
+					 --builddir=../linux \
 					 $@" 2>&1)
 	else
-		out=$(./deku --workdir="$WORKDIR" --ignore_cros=1 \
-					 --builddir="${BUILD_DIR}" \
-			   		 --target="$DEPLOY_PARAMS" --ssh_options="${SSHPARAMS}" \
-					 $@ 2>&1)
+	logInfo ./deku -v --workdir="$WORKDIR" \
+					 --builddir="/kernel/${BUILD_DIR##*/}" \
+			   		 --target="$DEPLOY_PARAMS" --ssh_options="${SSHPARAMS}"
+		out=$(docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest \
+			./deku --workdir="$WORKDIR" \
+				   --builddir="/kernel/${BUILD_DIR##*/}" \
+			   	   --target="$DEPLOY_PARAMS" --ssh_options="${SSHPARAMS}" \
+				   $@ 2>&1)
 	fi
 
 	res=$?
@@ -725,13 +838,21 @@ revertChanges()
 	if [[ $VM_TEST == "" ]]; then
 		echo "$(git -C $srcDir status -s -- ':!debian')" >> $LOG_FILE
 	else
-		remoteSh 'git -C linux-6.8.4 status -s -- ':!debian''
+		remoteSh 'git -C linux status -s -- ':!debian''
 	fi
 }
 
 exitError()
 {
 	local code=$1
+	if [[ $code == "" ]]; then
+		if [ -n "$ZSH_VERSION" ]; then
+			code=$LINENO
+		else
+			code=${BASH_LINENO[0]}
+		fi
+	fi
+
 	exit $code
 }
 
@@ -757,23 +878,37 @@ exportVars()
 		PREFIX=VM
 	fi
 
-	local SSH_PORT=${PREFIX}_SSH_PORT
+	local L_SSH_PORT=${PREFIX}_SSH_PORT
 	local SOURCE_DIR=${PREFIX}_SOURCE_DIR
 	local BUILD_DIR=${PREFIX}_BUILD_DIR
 	local SSH_KEY=${PREFIX}_SSH_KEY
-	declare -g SSH_PORT=${!SSH_PORT}
-	declare -g SOURCE_DIR="${!SOURCE_DIR}"
-	declare -g BUILD_DIR="${!BUILD_DIR}"
+
+ 	L_SSH_PORT=${!L_SSH_PORT}
+	[[ $SSH_PORT_OFFSET != "" ]] && L_SSH_PORT=$((L_SSH_PORT+SSH_PORT_OFFSET))
+	[[ $SSH_PORT_OVERRIDE != "" ]] && L_SSH_PORT=$SSH_PORT_OVERRIDE
+	export SSH_PORT=${L_SSH_PORT}
+
 	SSH_KEY="${!SSH_KEY}"
 
 	declare -g SSHPARAMS="${SSHPARAMS_OPTIONS} -o IdentityFile=$SSH_KEY"
-	declare -g DEPLOY_PARAMS="root@localhost:${!SSH_PORT}"
+	declare -g DEPLOY_PARAMS="root@localhost:${L_SSH_PORT}"
 
 	declare -g LOG_FILE=$(logFile)
 
 	export WORKDIR="workdir_$TEST_ID"
 	if [[ $VM_TEST ]]; then
 		export WORKDIR="/tmp/deku-vm-mount/deku/workdir_test"
+	fi
+
+	local kernelVer=$1
+	if [[ $kernelVer != "" ]]; then
+		SOURCE_DIR="${!SOURCE_DIR}"
+		BUILD_DIR="${!BUILD_DIR}"
+		declare -g BUILD_DIR=$(buildDir $kernelVer)
+		declare -g SOURCE_DIR=$(sourceDir $kernelVer)
+	else
+		export SOURCE_DIR="${!SOURCE_DIR}"
+		export BUILD_DIR="${!BUILD_DIR}"
 	fi
 }
 
@@ -793,6 +928,8 @@ parseArgs()
 			;;
 			--kernel)
 			KERNEL_VER="$2"
+			export BUILD_DIR=$(buildDir $KERNEL_VER)
+			export SOURCE_DIR=$(sourceDir $KERNEL_VER)
 			shift # past argument
 			shift # past value
 			;;

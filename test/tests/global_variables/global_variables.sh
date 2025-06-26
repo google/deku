@@ -131,7 +131,7 @@ test()
 
 	remoteSh $cmd
 
-	appendToFunction "$SOURCE_DIR/$file" $function "printk(KERN_INFO \"\");"
+	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 	clearLogs
 	dekuDeploy || exitError 5
 	sleep 1
@@ -149,7 +149,7 @@ test()
 
 	logStep "OK"
 
-	git -C "$SOURCE_DIR" checkout $file 2>/dev/null
+	git -C "$srcDir" checkout $file 2>/dev/null
 
 	appendBeforeFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect "$GlobalVarsReadMostly"
 	appendToFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect "$FunctionCodeReadMostly"

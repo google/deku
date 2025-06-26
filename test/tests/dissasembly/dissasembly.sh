@@ -9,22 +9,25 @@ FILES=""
 DESCRIPTION="Dissasembly"
 . test/common.sh
 
-# prepareKernel // leave this commit to avoid rebuilding the kernel for this test
+# prepareKernelAndBuild // leave this commit to avoid rebuilding the kernel for this test
 test()
 {
 	local file=$1
 	local fun=$2
+	local outFile=/tmp/disass-$KERNEL_VER.txt
 
 	local dir=test/tests/dissasembly/files
 
-	./elfutils --disassemble -f "$dir/$file.o" -s $fun > /tmp/disass.txt
-	sed -i 's/ *$//' /tmp/disass.txt
+	runCmd "./elfutils --disassemble -f $dir/$file.o -s $fun"
+	runCmd "./elfutils --disassemble -f $dir/$file.o -s $fun" > $outFile
+	sed -i 's/ *$//' $outFile
+	sed -i 's/\r/\n/g; s/\n$//' $outFile
 	logStep -n "$file $fun... "
-	# cp /tmp/disass.txt $dir/$fun.dis
-	cmp /tmp/disass.txt $dir/$fun.dis || { \
-		cat  >> $LOG_FILE; \
-		cat /tmp/disass.txt >> $LOG_FILE; \
-		LogErr "Failed"; \
+	# cp $outFile $dir/$fun.dis
+	cmp $outFile $dir/$fun.dis || { \
+		echo >> $LOG_FILE; \
+		diff -y $outFile $dir/$fun.dis >> $LOG_FILE; \
+		logErr "Failed"; \
 		exit 1; \
 	}
 	logStep "OK"

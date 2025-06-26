@@ -18,11 +18,10 @@ inlineTest()
 	local discardedfuncs=$5
 	local modname="$(generateModuleName $file)"
 	local moduledir="$WORKDIR/$modname"
+	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernel $KERNEL_VER
-
-	appendToFunction "$SOURCE_DIR/$file" $function "$text"
-	appendToFunction "$SOURCE_DIR/$file" i9xx_update_cursor ";"
+	appendToFunction "$srcDir/$file" $function "$text"
+	appendToFunction "$srcDir/$file" i9xx_update_cursor ";"
 
 	dekuBuild || exit 1
 

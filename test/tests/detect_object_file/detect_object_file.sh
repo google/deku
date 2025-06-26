@@ -17,7 +17,7 @@ checkDetectionObjectFile()
 	local srcDir=$(sourceDir $KERNEL_VER)
 
 	logStep "Check if basic generate module works"
-	prepareKernel $KERNEL_VER CONFIG_INPUT_UINPUT
+	prepareKernelAndBuild $KERNEL_VER CONFIG_INPUT_UINPUT
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 
@@ -26,7 +26,7 @@ checkDetectionObjectFile()
 	[[ ! -f "$koFile" ]] && exit 2
 
 	logStep "Check if DEKU module is not generated for kernel module if it's not enabled in kernel config"
-	prepareKernel $KERNEL_VER -CONFIG_INPUT_UINPUT
+	prepareKernelAndBuild $KERNEL_VER -CONFIG_INPUT_UINPUT
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 
@@ -35,7 +35,7 @@ checkDetectionObjectFile()
 	[[ -f "$koFile" ]] && exit 4
 
 	logStep "Check if DEKU module is generated for kernel module if it's enabled in kernel config"
-	prepareKernel $KERNEL_VER +CONFIG_INPUT_UINPUT
+	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 
@@ -44,7 +44,7 @@ checkDetectionObjectFile()
 	[[ ! -f "$koFile" ]] && exit 6
 
 	logStep "Check if DEKU module is not generated for kernel module after it's getting disabled in kernel config"
-	prepareKernel $KERNEL_VER -CONFIG_INPUT_UINPUT
+	prepareKernelAndBuild $KERNEL_VER -CONFIG_INPUT_UINPUT
 
 	appendToFunction "$srcDir/$srcfile" uinput_open "$text"
 

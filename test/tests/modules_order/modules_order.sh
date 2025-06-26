@@ -19,14 +19,15 @@ test()
 	local file2="drivers/gpu/drm/drm_atomic_uapi.c"
 	local function2="drm_atomic_plane_set_property"
 	local functionHeader2="static int drm_atomic_plane_set_property"
+	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernel $KERNEL_VERSION_5_15
+	prepareKernelAndBuild $KERNEL_VERSION_5_15
 	runQemu
 
-	appendToFunction "$SOURCE_DIR/$file1" $function1 "cursor_x = 1;\ncursor_y = 1;"
-	appendToFunction "$SOURCE_DIR/$file2" $function2 "pr_info(\"cursor=%dx%d\", cursor_x, cursor_y);"
-	sed -i "s/$functionHeader1/int cursor_x = 2;\nint cursor_y = 2;\n$functionHeader1/g" "$SOURCE_DIR/$file1"
-	sed -i "s/$functionHeader2/extern int cursor_x;\nextern int cursor_y;\n$functionHeader2/g" "$SOURCE_DIR/$file2"
+	appendToFunction "$srcDir/$file1" $function1 "cursor_x = 1;\ncursor_y = 1;"
+	appendToFunction "$srcDir/$file2" $function2 "pr_info(\"cursor=%dx%d\", cursor_x, cursor_y);"
+	sed -i "s/$functionHeader1/int cursor_x = 2;\nint cursor_y = 2;\n$functionHeader1/g" "$srcDir/$file1"
+	sed -i "s/$functionHeader2/extern int cursor_x;\nextern int cursor_y;\n$functionHeader2/g" "$srcDir/$file2"
 
 	dekuDeploy || exit 1
 
@@ -34,13 +35,13 @@ test()
 	grep "module=" "$WORKDIR/$DEKU_RELOAD_SCRIPT" | nl | grep "1.*input_mt$" || exit 2
 	grep "module=" "$WORKDIR/$DEKU_RELOAD_SCRIPT" | nl | grep "2.*drm_atomic_uapi$" || exit 3
 
-	git -C "$SOURCE_DIR" checkout $file1 2>/dev/null
-	git -C "$SOURCE_DIR" checkout $file2 2>/dev/null
+	git -C "$srcDir" checkout $file1 2>/dev/null
+	git -C "$srcDir" checkout $file2 2>/dev/null
 
-	appendToFunction "$SOURCE_DIR/$file1" $function1 "cursor_x = 1;\ncursor_y = 1;"
-	appendToFunction "$SOURCE_DIR/$file2" $function2 "pr_info(\"cursor=%dx%d\", cursor_x, cursor_y);"
-	sed -i "s/$functionHeader1/extern int cursor_x;\nextern int cursor_y;\n$functionHeader1/g" "$SOURCE_DIR/$file1"
-	sed -i "s/$functionHeader2/int cursor_x = 2;\nint cursor_y = 2;\n$functionHeader2/g" "$SOURCE_DIR/$file2"
+	appendToFunction "$srcDir/$file1" $function1 "cursor_x = 1;\ncursor_y = 1;"
+	appendToFunction "$srcDir/$file2" $function2 "pr_info(\"cursor=%dx%d\", cursor_x, cursor_y);"
+	sed -i "s/$functionHeader1/extern int cursor_x;\nextern int cursor_y;\n$functionHeader1/g" "$srcDir/$file1"
+	sed -i "s/$functionHeader2/int cursor_x = 2;\nint cursor_y = 2;\n$functionHeader2/g" "$srcDir/$file2"
 
 	dekuDeploy || exit 4
 
@@ -51,8 +52,8 @@ test()
 	grep "\$RMMOD deku_" "$WORKDIR/$DEKU_RELOAD_SCRIPT" | nl | grep "2.*input_mt$" || exit 8
 
 	logStep "Checking modules unloading order..."
-	git -C "$SOURCE_DIR" checkout $file1 2>/dev/null
-	git -C "$SOURCE_DIR" checkout $file2 2>/dev/null
+	git -C "$srcDir" checkout $file1 2>/dev/null
+	git -C "$srcDir" checkout $file2 2>/dev/null
 
 	dekuDeploy || exit 9
 

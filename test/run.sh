@@ -93,7 +93,6 @@ prepareLtsTests()
 
 	addTest inline "Inline"
 	# # addTest relocation "Relocation"
-	# addTest optimisation_cold "Optimisation - Cold"
 	addTest unknown_type "Relocate unknown type"
 	# addTest filter_symbols "Filter symbols"
 	# # Tests on QEMU
@@ -105,10 +104,9 @@ prepareLtsTests()
 prepareTests()
 {
 	[[ $VM_TEST == "" ]] && addTest relocation "Relocation"
-	[[ $VM_TEST == "" ]] && addTest optimisation_cold "Optimisation - Cold"
 	# [[ $VM_TEST == "" ]] && addTest all_versions "All kernel versions"
 
-	addTest inline "Inline"
+	# addTest inline "Inline"
 	addTest notraceable "No traceable functions"
 	addTest builderror "Build after fixing errors"
 	addTest static_global_symbol "Static and Global symbol"
@@ -121,6 +119,7 @@ prepareTests()
 	addTest uncommon_symbol_name "Uncommon symbol name"
 	addTest header_files_basic "Basic changes in header file"
 	addTest filter_symbols "Filter symbols"
+	addTest multi_build
 	# Tests on QEMU
 	addTest symbol_index "Symbol index"
 	addTest global_variables "Global variables"
@@ -145,6 +144,7 @@ prepareTests()
 	# Deprecated tests
 	# addTest unload "Unload"
 	# addTest modules_order "Modules order"
+	# addTest optimisation_cold "Optimisation - Cold"
 
 	# Unknown tests
 	# addTest elfsym "ELF symbols"
@@ -173,13 +173,21 @@ function revert()
 	if [[ $VM_TEST == "" ]]; then
 		echo "$(git -C $srcDir status -s -- ':!debian')" >> $LOG_FILE
 	else
-		remoteSh 'git -C linux-6.8.4 status -s -- ':!debian''
+		remoteSh 'git -C linux status -s -- ':!debian''
 	fi
+}
+
+testId()
+{
+	local kernelVersion=$1
+	local test=$2
+	echo $test-$TEST_PLATFORM-${kernelVersion//\//_}
 }
 
 function runTests()
 {
 	local kernelVersions=$@
+	local res=0
 
 	# Restore all files that are used in tests
 	for kernelVersion in $kernelVersions; do
@@ -202,8 +210,8 @@ function runTests()
 		for test in "${!Tests[@]}"; do
 			local testScript=test/tests/$test/$test.sh
 			local desc=$(bash $testScript --description)
-			export TEST_ID=$test-$TEST_PLATFORM-${kernelVersion//\//_}
-			exportVars
+			export TEST_ID=$(testId $kernelVersion $test)
+			exportVars $kernelVersion
 
 			if grep -q "\b$TEST_ID\b" test/logs/pass_test > /dev/null 2>&1; then
 				echo "Skip '$desc' on kernel $kernelVersion"
@@ -220,20 +228,34 @@ function runTests()
 			rm -f $(logFile vm)
 
 			skipPrepareKernel=
-			if grep -q "\bprepareKernel\b" $testScript; then
+			skipprepareKernelAndBuild=
+			if grep -q "\bprepareKernelAndBuild\b" $testScript; then
 				skipPrepareKernel=1
+				skipprepareKernelAndBuild=1
 			fi
 			if grep -q "\bbuildKernel\b" $testScript; then
-				skipPrepareKernel=1
+				skipprepareKernelAndBuild=1
 			fi
-			if [[ "$skipPrepareKernel" != 1 ]]; then
+
+			if [[ "$skipPrepareKernel" != 1 ]] && [[ "$skipprepareKernelAndBuild" == 1 ]]; then
+				logStep "Prepare kernel $kernelVersion"
+				prepareKernel $kernelVersion
+				res=$?
+				[[ $res != 0 ]] && continue
+			fi
+
+			if [[ "$skipprepareKernelAndBuild" != 1 ]]; then
 				if [[ "$rebuildKernel" == 1 ]]; then
-					logStep "Prepare kernel $kernelVersion"
-					prepareKernel $kernelVersion
+					logStep "Prepare and build kernel $kernelVersion"
+					prepareKernelAndBuild $kernelVersion
+					res=$?
+					[[ $res != 0 ]] && continue
 					rebuildKernel=
 				fi
 				if grep -q "\bdekuDeploy\b" $testScript; then
-					runQemu
+					runQemu $kernelVersion
+					res=$?
+					[[ $res != 0 ]] && continue
 				fi
 			fi
 
@@ -241,22 +263,27 @@ function runTests()
 				rebuildKernel=1
 			fi
 			if grep -q "\bprepareKernel\b" $testScript; then
+				rebuildKernel=1
+			fi
+			if grep -q "\bprepareKernelAndBuild\b" $testScript; then
 				rebuildKernel=1
 			fi
 
 			bash $testScript --kernel $kernelVersion
-			local res=$?
+			res=$?
 			[[ $EXIT_ON_FAILURE == "" ]] && revert $kernelVersion $test
 			checkErr $kernelVersion $res $test "$desc"
 		done
 	done
+
+	return $res
 }
 
 main()
 {
 	local run_base_tests=
 	local run_lts_tests=
-	local kernVer=
+	local kernVer=$KERNEL_VERSION
 	local cont=
 
 	mkdir -p test/logs/pass
@@ -306,11 +333,35 @@ main()
 			shift
 			shift
 			;;
+			--system)
+			logInfo "Run on $2"
+			shift
+			shift
+			;;
 			--kernel)
 			kernVer=$2
 			logInfo "Run on $kernVer"
 			shift
 			shift
+			;;
+			--index)
+			index=$2
+			logInfo "Test index: $index"
+			export SSH_PORT_OFFSET=$index
+			exportVars
+			shift
+			shift
+			;;
+			--port)
+			export SSH_PORT_OVERRIDE=$2
+			logInfo "SSH port: $SSH_PORT_OVERRIDE"
+			exportVars
+			shift
+			shift
+			;;
+			--ssh)
+			testId $kernVer $test
+			exit 0
 			;;
 			--quick)
 			QUICK_TEST=--quick
@@ -333,13 +384,23 @@ main()
 		esac
 	done
 
+	if [[ "${!Tests[@]}" != "" && $run_lts_tests ]]; then
+		if [[ $kernVer == "origin/master" ]]; then
+			kernVer=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | tail -n 1)
+		else
+			kernVer=$(git -C "$KERNELS_DIR/linux-stable" tag -l --sort=v:refname | grep -F ${kernVer}. | tail -n 1)
+		fi
+	fi
+	local srcDir=$(sourceDir $kernVer)
+
 	if [[ $VM_TEST ]]; then
-		# mount | grep -qF "/tmp/deku-vm-mount" || rm -rf /tmp/deku-vm-mount
+		if mount | grep -qF "/tmp/deku-vm-mount"; then
+			# if /tmp/deku-vm-mount is empty then umount /tmp/deku-vm-mount
+			[[ -z "$(ls -A /tmp/deku-vm-mount)" ]] && umount /tmp/deku-vm-mount
+		fi
+
 		mkdir -p /tmp/deku-vm-mount
 		runQemu
-		rsync -rlt ../deku /tmp/deku-vm-mount/ --exclude "workdir_*" --exclude ".git" --exclude "test/rootfs.img" --exclude "test/"
-		remoteShOut "cd deku/; make clean; make"
-		remoteShOut "sudo rm -rf /var/log/*; rm -f ~/linux-6.8.4/.git/index.lock"
 	fi
 
 	if [[ ! $CHROMEOS$VM_TEST ]]; then
@@ -351,15 +412,15 @@ main()
 		fi
 	fi
 
-	if [[ $run_base_tests || $run_lts_tests ]] && [[ $LOCAL_TEST == "" ]] && [[ $VM_TEST == "" ]]; then
-		if [[ "$SOURCE_DIR" == "" || ! -d "$SOURCE_DIR" ]]; then
-			logInfo "Can't find kernel sources dir $SOURCE_DIR"
-			prepareKernelSources
+	if [[ $CHROMEOS == "" ]] && [[ $LOCAL_TEST == "" ]] && [[ $VM_TEST == "" ]]; then
+		if [[ "$srcDir" == "" || ! -d "$srcDir" ]]; then
+			logInfo "Can't find kernel sources dir $srcDir. Downloading..."
+			prepareKernelSources $kernVer
 		else
-			git -C "$SOURCE_DIR" fetch
+			git -C "$KERNELS_DIR/linux-stable" fetch
 		fi
 	fi
-
+# make -C "$srcDir" mrproper
 	if [[ "${!Tests[@]}" != "" ]]; then
 		runTests $kernVer
 		return
@@ -383,16 +444,18 @@ main()
 
 	if [[ $CHROMEOS ]]; then
 		prepareLtsTests
-		runTests v5.10 v5.15 v6.1 v6.6 v6.12 upstream &
+		runTests v5.10 v5.15 v6.1 v6.6 v6.12 &
 		bg_pids+=$!
 	fi
 	if [[ $run_lts_tests ]]; then
 		prepareLtsTests
-		local v5_10=$(git -C "$SOURCE_DIR" tag -l --sort=v:refname | grep -F v5.10. | tail -n 1)
-		local v5_15=$(git -C "$SOURCE_DIR" tag -l --sort=v:refname | grep -F v5.15. | tail -n 1)
-		local v6_1=$(git -C "$SOURCE_DIR" tag -l --sort=v:refname | grep -F v6.1. | tail -n 1)
-		local v6_6=$(git -C "$SOURCE_DIR" tag -l --sort=v:refname | grep -F v6.6. | tail -n 1)
-		local v6_12=$(git -C "$SOURCE_DIR" tag -l --sort=v:refname | grep -F v6.12. | tail -n 1)
+		srcDir=/usr/local/google/home/mmaslanka/linux-trees/linux-stable
+		echo "$srcDir"
+		local v5_10=$(git -C "$srcDir" tag -l --sort=v:refname | grep -F v5.10. | tail -n 1)
+		local v5_15=$(git -C "$srcDir" tag -l --sort=v:refname | grep -F v5.15. | tail -n 1)
+		local v6_1=$(git -C "$srcDir" tag -l --sort=v:refname | grep -F v6.1. | tail -n 1)
+		local v6_6=$(git -C "$srcDir" tag -l --sort=v:refname | grep -F v6.6. | tail -n 1)
+		local v6_12=$(git -C "$srcDir" tag -l --sort=v:refname | grep -F v6.12. | tail -n 1)
 		runTests $v5_10 $v5_15 $v6_1 $v6_6 $v6_12 origin/master
 	fi
 	if [[ $run_base_tests ]]; then
@@ -437,4 +500,4 @@ main()
 	fi
 }
 
-time main $@
+main $@

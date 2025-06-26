@@ -18,7 +18,7 @@ checkAndResolveDep()
 
 	local koPath="${file/".c"/".ko"}"
 	local text="pr_info(\"test\");"
-	local srcDir="$(sourceDir)"
+	local srcDir="$(sourceDir $KERNEL_VER)"
 
 	logStep "Detect that $(basename $koPath) module is not loaded"
 	appendToFunction "$srcDir/$file" $func "$text"
@@ -33,22 +33,21 @@ checkAndResolveDep()
 	logStep "Upload and load module $(basename $koPath)"
 
 	if [[ $VM_TEST ]]; then
-		remoteSh "cd linux-6.8.4; sudo insmod $koPath"
+		remoteSh "cd linux; sudo insmod $koPath"
 	elif [[ $CHROMEOS ]]; then
-		copyToRemote "$(buildDir)/$koPath" "."
-		remoteSh "insmod ./$(basename $koPath)"
+		remoteSh "modprobe $(filenameNoExt $koPath)"
 	else
-		copyToRemote "$(buildDir)/$koPath" "/tmp/"
+		copyToRemote "$(buildDir $KERNEL_VER)/$koPath" "/tmp/"
 		remoteSh "insmod /tmp/$(basename $koPath)"
 	fi
 
-	dekuDeploy || exit 3
+	dekuDeploy || { remoteSh "lsmod"; exit 3; }
 	logStep "Depended module for $file resolved successfuly"
 }
 
 test()
 {
-	prepareKernel $KERNEL_VER +CONFIG_INPUT_UINPUT +CONFIG_HID_LOGITECH_HIDPP
+	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT +CONFIG_HID_LOGITECH_HIDPP
 	runQemu
 
 	# checkAndResolveDep drivers/input/misc/uinput.c uinput_request_send uinput
