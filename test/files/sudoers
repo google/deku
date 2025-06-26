@@ -62,6 +62,7 @@ test	ALL=(root) NOPASSWD: /home/test/update_grub.sh
 test	ALL=(root) NOPASSWD: /usr/sbin/reboot
 test	ALL=(root) NOPASSWD: /usr/sbin/ip
 test	ALL=(root) NOPASSWD: /usr/bin/grep deku_ *
+test	ALL=(root) NOPASSWD: /usr/bin/grep -F 0 /proc/*/task/*/patch_state
 test	ALL=(root) NOPASSWD: /usr/bin/dmesg -C
 test	ALL=(root) NOPASSWD: /usr/sbin/sysctl -w kernel.dmesg_restrict=0
 test	ALL=(root) NOPASSWD: /usr/sbin/sysctl -w kernel.panic_on_oops=0
@@ -69,6 +70,7 @@ test	ALL=(root) NOPASSWD: /usr/sbin/insmod drivers/input/misc/uinput.ko
 test	ALL=(root) NOPASSWD: /usr/sbin/modprobe drm_display_helper
 test	ALL=(root) NOPASSWD: /usr/sbin/rmmod uinput.ko
 test	ALL=(root) NOPASSWD: /usr/bin/cat /dev/uinput
+test	ALL=(root) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/cpu*/online
 test	ALL=(root) NOPASSWD: /usr/bin/mount *
 
 @includedir /etc/sudoers.d

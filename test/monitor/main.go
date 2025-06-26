@@ -49,7 +49,6 @@ var kernelSets = []KernelSet{
 
 var testNames = []string{
 	"relocation",
-	// "multi_build",
 	"inline",
 	"notraceable",
 	"builderror",
@@ -76,6 +75,7 @@ var testNames = []string{
 	"dependend_module",
 	"patch",
 	"static_local_variables",
+	"stalled_task",
 }
 
 type TestEntity struct {

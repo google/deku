@@ -151,11 +151,3 @@ main()
 }
 
 main @
-# runJob bash test/t.sh
-# echo $?
-# make -C "/home/mmaslanka/.cache/deku/linux" O="/home/mmaslanka/.cache/deku/build-linux-deku" defconfig
-# git -C "/home/mmaslanka/.cache/deku/linux" checkout v5.10.224
-# git -C "/home/mmaslanka/.cache/deku/linux" status
-# make -C "/home/mmaslanka/.cache/deku/linux" O="/home/mmaslanka/.cache/deku/build-linux-deku" -j`nproc`
-# ./test/run.sh --test function_call --kernel v5.10.224 --base --index 1
-

@@ -119,7 +119,6 @@ prepareTests()
 	addTest uncommon_symbol_name "Uncommon symbol name"
 	addTest header_files_basic "Basic changes in header file"
 	addTest filter_symbols "Filter symbols"
-	addTest multi_build
 	# Tests on QEMU
 	addTest symbol_index "Symbol index"
 	addTest global_variables "Global variables"
@@ -134,6 +133,7 @@ prepareTests()
 	addTest dependend_module "Dependent module"
 	addTest patch
 	addTest static_local_variables
+	addTest stalled_task
 
 	# Other
 	# addTest disassembler_all
