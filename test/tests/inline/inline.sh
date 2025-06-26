@@ -42,7 +42,7 @@ inlineTest()
 
 test()
 {
-	prepareKernelAndBuild $KERNEL_VER
+	prepareKernelAndDeploy $KERNEL_VER
 
 	inlineTest $KERNEL_VER "fs/timerfd.c" "timerfd_triggered" timerfd_tmrproc timerfd_alarmproc
 	if [[ $KERNEL_VER == v5.10* ]] || [[ $KERNEL_VER == v5.15* ]] || [[ $KERNEL_VER == v6.1.* ]]; then
@@ -51,7 +51,7 @@ test()
 		inlineTest $KERNEL_VER "drivers/gpu/drm/i915/display/intel_dvo.c" "enc_to_dvo" intel_dvo_mode_valid intel_dvo_connector_get_hw_state intel_enable_dvo intel_dvo_detect intel_dvo_enc_destroy intel_dvo_compute_config intel_disable_dvo
 	fi
 	# if [[ $KERNEL_VER == v5.10* ]]; then
-	# 	prepareKernelAndBuild v5.4.200
+	# 	prepareKernelAndDeploy v5.4.200
 	# 	inlineTest v5.4.200 "drivers/input/evdev.c" "evdev_get_mask_cnt,__evdev_is_filtered,evdev_pass_values" evdev_do_ioctl evdev_pass_values evdev_events evdev_event
 	# fi
 }

@@ -9,7 +9,7 @@ FILES=""
 DESCRIPTION="Convert to relocations"
 . test/common.sh
 
-# prepareKernelAndBuild // leave this commit to avoid rebuilding the kernel for this test
+# prepareKernelAndDeploy // leave this commit to avoid rebuilding the kernel for this test
 test()
 {
 	local file=$1
@@ -24,7 +24,7 @@ test()
 		[[ $fun == "__ip_rt_update_pmtu" ]] && return
 	fi
 
-	if [[ $VM_TEST != "" ]]; then
+	if [[ $VM_TEST ]]; then
 		mkdir -p $WORKDIR/../$file
 		cp $dir/$file/$file.o $WORKDIR/../$file/$file.o
 		cp $dir/$file/$fun.dis $WORKDIR/../$file/$fun.dis
@@ -34,9 +34,8 @@ test()
 	fi
 
 	logStep -n "$file $fun... "
-	runCmd "./elfutils --disassemble -f $dir/$file/$file.o -s $fun -r > $outDisFile"
-	if [[ $VM_TEST != "" ]]; then
-		outDisFile=$WORKDIR/../$outDisFile
+	runCmd ./elfutils --disassemble -f $dir/$file/$file.o -s $fun -r > $outDisFile
+	if [[ $VM_TEST ]]; then
 		dir=$originDir
 	fi
 	sed -i 's/ *$//' $outDisFile

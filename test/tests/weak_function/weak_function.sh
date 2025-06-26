@@ -19,7 +19,7 @@ test()
 	appendBeforeFunction "$srcDir/arch/x86/kernel/itmt.c" sched_set_itmt_core_prio 'void weak_fun(void);\n\nvoid weak_fun(void){printk(KERN_INFO "weak function called from %s", __FILE__);}'
 	appendToFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect "weak_fun();"
 
-	buildKernel || exitError 1
+	buildKernelToLaunch || exitError 1
 	runQemu
 
 	logStep "Check if the local weak function is not called after change the caller function"
@@ -47,7 +47,7 @@ test()
 	appendBeforeFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect 'void weak_fun(void);\n\nvoid __weak weak_fun(void){printk(KERN_INFO "weak function called from %s", __FILE__);}'
 	appendToFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect "weak_fun();"
 
-	buildKernel || exitError 7
+	buildKernelToLaunch || exitError 7
 	runQemu
 
 	appendToFunction "$srcDir/net/ipv4/tcp_ipv4.c" weak_fun "printk(KERN_INFO \"Modified weak function\");"

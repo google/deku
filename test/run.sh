@@ -29,6 +29,11 @@ checkErr()
 	rm -rf test/logs/fails/$(basename $(logFile cros))
 	rm -rf test/logs/fails/$(basename $(logFile qemu))
 	rm -rf test/logs/fails/$(basename $(logFile vm))
+	rm -rf test/logs/pass/$(basename $(logFile))
+	rm -rf test/logs/pass/$(basename $(logFile build))
+	rm -rf test/logs/pass/$(basename $(logFile cros))
+	rm -rf test/logs/pass/$(basename $(logFile qemu))
+	rm -rf test/logs/pass/$(basename $(logFile vm))
 	rm -rf test/logs/fails/workdir/$TEST_ID
 	rm -rf test/logs/pass/workdir/$TEST_ID
 
@@ -82,7 +87,7 @@ prepareLtsTests()
 	addTest dependent_changes
 	addTest static_keys "Static keys"
 	addTest dependend_module "Dependent module"
-
+	addTest oot_module
 
 	addTest builderror "Build after fixing errors"
 	addTest atomic_replace "atomic_replace"
@@ -134,6 +139,7 @@ prepareTests()
 	addTest patch
 	addTest static_local_variables
 	addTest stalled_task
+	addTest oot_module
 
 	# Other
 	# addTest disassembler_all
@@ -228,28 +234,35 @@ function runTests()
 			rm -f $(logFile vm)
 
 			skipPrepareKernel=
-			skipprepareKernelAndBuild=
-			if grep -q "\bprepareKernelAndBuild\b" $testScript; then
+			skipPrepareKernelAndDeploy=
+			if grep -q "\bprepareKernelAndDeploy\b" $testScript; then
 				skipPrepareKernel=1
-				skipprepareKernelAndBuild=1
+				skipPrepareKernelAndDeploy=1
 			fi
-			if grep -q "\bbuildKernel\b" $testScript; then
-				skipprepareKernelAndBuild=1
+			if grep -q "\bbuildKernelToLaunch\b" $testScript; then
+				skipPrepareKernelAndDeploy=1
 			fi
 
-			if [[ "$skipPrepareKernel" != 1 ]] && [[ "$skipprepareKernelAndBuild" == 1 ]]; then
+			if [[ "$skipPrepareKernel" != 1 ]] && [[ "$skipPrepareKernelAndDeploy" == 1 ]]; then
 				logStep "Prepare kernel $kernelVersion"
 				prepareKernel $kernelVersion
 				res=$?
 				[[ $res != 0 ]] && continue
 			fi
 
-			if [[ "$skipprepareKernelAndBuild" != 1 ]]; then
+			if [[ "$skipPrepareKernelAndDeploy" != 1 ]]; then
 				if [[ "$rebuildKernel" == 1 ]]; then
-					logStep "Prepare and build kernel $kernelVersion"
-					prepareKernelAndBuild $kernelVersion
-					res=$?
-					[[ $res != 0 ]] && continue
+					if grep -q "\bdekuDeploy\b" $testScript; then
+						logStep "Prepare, build and deploy kernel $kernelVersion"
+						prepareKernelAndDeploy $kernelVersion
+						res=$?
+						[[ $res != 0 ]] && continue
+					else
+						logStep "Prepare and build kernel $kernelVersion"
+						prepareKernelAndBuild $kernelVersion
+						res=$?
+						[[ $res != 0 ]] && continue
+					fi
 					rebuildKernel=
 				fi
 				if grep -q "\bdekuDeploy\b" $testScript; then
@@ -259,13 +272,13 @@ function runTests()
 				fi
 			fi
 
-			if grep -q "\bbuildKernel\b" $testScript; then
+			if grep -q "\bbuildKernelToLaunch\b" $testScript; then
 				rebuildKernel=1
 			fi
 			if grep -q "\bprepareKernel\b" $testScript; then
 				rebuildKernel=1
 			fi
-			if grep -q "\bprepareKernelAndBuild\b" $testScript; then
+			if grep -q "\bprepareKernelAndDeploy\b" $testScript; then
 				rebuildKernel=1
 			fi
 
@@ -285,6 +298,7 @@ main()
 	local run_lts_tests=
 	local kernVer=$KERNEL_VERSION
 	local cont=
+	local rerun=
 
 	mkdir -p test/logs/pass
 	[[ $EXIT_ON_FAILURE ]] && logWarn "Exit on failure"
@@ -352,6 +366,10 @@ main()
 			shift
 			shift
 			;;
+			--rerun)
+			rerun=1
+			shift
+			;;
 			--port)
 			export SSH_PORT_OVERRIDE=$2
 			logInfo "SSH port: $SSH_PORT_OVERRIDE"
@@ -359,7 +377,7 @@ main()
 			shift
 			shift
 			;;
-			--ssh)
+			--testid)
 			testId $kernVer $test
 			exit 0
 			;;
@@ -424,6 +442,13 @@ main()
 			git -C "$KERNELS_DIR/linux-stable" fetch
 		fi
 	fi
+
+	if [[ $rerun ]]; then
+		local testId=$(testId $kernVer $test)
+		sed -i "/$testId/d" test/logs/pass_test
+		sed -i "/$testId/d" test/logs/failed_test
+	fi
+
 # make -C "$srcDir" mrproper
 	if [[ "${!Tests[@]}" != "" ]]; then
 		runTests $kernVer

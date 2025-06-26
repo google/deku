@@ -49,7 +49,7 @@ test()
 	local cmd="CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com; CMD='cat /dev/uinput 2>/dev/null'; eval \$CMD; eval sudo \$CMD; sleep 0.1"
 	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT
+	prepareKernelAndDeploy $KERNEL_VER +CONFIG_INPUT_UINPUT
 	runQemu
 
 	logStep "Check revert all changes by using empty livepatch module..."
@@ -106,7 +106,7 @@ test()
 	isCumulativeModule || exitError $LINENO
 	# workdirContainsOnly deku_00000000 || exitError $LINENO
 
-	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT
+	prepareKernelAndDeploy $KERNEL_VER +CONFIG_INPUT_UINPUT
 	runQemu
 
 	if [[ $VM_TEST ]]; then

@@ -30,7 +30,7 @@ mappingTest()
 	# 	appendToFunction "$srcDir/$file" $fun "printk(KERN_INFO \"$text/$fun\", __func__);" > /dev/null
 	# done
 
-	buildKernel || exitError 1
+	buildKernelToLaunch || exitError 1
 	runQemu
 
 	for (( i=0; i<${#functions[@]}; i++ )); do

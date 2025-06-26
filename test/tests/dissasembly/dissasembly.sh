@@ -9,7 +9,7 @@ FILES=""
 DESCRIPTION="Dissasembly"
 . test/common.sh
 
-# prepareKernelAndBuild // leave this commit to avoid rebuilding the kernel for this test
+# prepareKernelAndDeploy // leave this commit to avoid rebuilding the kernel for this test
 test()
 {
 	local file=$1

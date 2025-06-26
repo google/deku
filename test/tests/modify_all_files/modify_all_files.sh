@@ -15,7 +15,7 @@ modifyAllFunctionsAtOnce()
 {
 	local text="[$SCRIPT_NAME] DEKU $function test"
 	local srcDir=$(sourceDir $KERNEL_VER)
-#prepareKernelAndBuild
+#prepareKernelAndDeploy
 	revertChanges
 
 	local dir=$srcDir/drivers/

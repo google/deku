@@ -111,7 +111,7 @@ test()
 	altExpecteDmsg="static_global_var0_1=551 static_global_var0_2=667 static_global_var1=29001 static_global_var2=29002 static_volatile_global_var=29003 static_const_global_var=4 global_var0_1=493 global_var0_2=377 global_var1=29005 global_var2=29006 volatile_global_var=29007 const_global_var=8"
 	altExpecteDmsg2="static_global_var0_1=1007 static_global_var0_2=1219 static_global_var1=53001 static_global_var2=53002 static_volatile_global_var=53003 static_const_global_var=4 global_var0_1=901 global_var0_2=689 global_var1=53005 global_var2=53006 volatile_global_var=53007 const_global_var=8"
 
-	buildKernel || exitError 1
+	buildKernelToLaunch || exitError 1
 	runQemu
 
 	logStep "Checking detection new global variables... "
@@ -126,7 +126,7 @@ test()
 
 	logStep "Checking if global variables are properly mapped"
 
-	buildKernel || exitError 4
+	buildKernelToLaunch || exitError 4
 	runQemu
 
 	remoteSh $cmd

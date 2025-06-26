@@ -67,8 +67,10 @@ test	ALL=(root) NOPASSWD: /usr/bin/dmesg -C
 test	ALL=(root) NOPASSWD: /usr/sbin/sysctl -w kernel.dmesg_restrict=0
 test	ALL=(root) NOPASSWD: /usr/sbin/sysctl -w kernel.panic_on_oops=0
 test	ALL=(root) NOPASSWD: /usr/sbin/insmod drivers/input/misc/uinput.ko
+test	ALL=(root) NOPASSWD: /usr/sbin/insmod deku/../deku_test_oot_module/test_module.ko
 test	ALL=(root) NOPASSWD: /usr/sbin/modprobe drm_display_helper
 test	ALL=(root) NOPASSWD: /usr/sbin/rmmod uinput.ko
+test	ALL=(root) NOPASSWD: /usr/sbin/rmmod test_module.ko
 test	ALL=(root) NOPASSWD: /usr/bin/cat /dev/uinput
 test	ALL=(root) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/cpu*/online
 test	ALL=(root) NOPASSWD: /usr/bin/mount *

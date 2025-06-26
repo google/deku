@@ -44,7 +44,7 @@ type KernelSet struct {
 var kernelSets = []KernelSet{
 	KernelSet{"qemu", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12", "origin/master"}},
 	KernelSet{"cros", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12"}},
-	KernelSet{"vm-ubuntu", []string{"v6.8", "v6.11"}},
+	KernelSet{"vm-ubuntu", []string{"v6.8", "v6.11", "v6.14"}},
 }
 
 var testNames = []string{
@@ -76,6 +76,7 @@ var testNames = []string{
 	"patch",
 	"static_local_variables",
 	"stalled_task",
+	"oot_module",
 }
 
 type TestEntity struct {
@@ -310,10 +311,14 @@ func getTestIndexFromAgentFile(agentName, state string) int {
 	return getTestIndexFor(testName, system, kernel)
 }
 
-func runTestOnAgent(agent string, index int) {
+func runTestOnAgent(agent string, index int, rerun bool) {
 	test := tests[index]
+	rerunParam := ""
+	if rerun {
+		rerunParam = "--rerun"
+	}
 	agentIndex := slicesIndex(allAgents, agent)
-	testParams := fmt.Sprintf("--test %s --system %s --kernel %s --index %d", test.name, test.system, test.kernel, agentIndex)
+	testParams := fmt.Sprintf("--test %s --system %s --kernel %s --index %d %s", test.name, test.system, test.kernel, agentIndex, rerunParam)
 	if test.system == "qemu" {
 		testParams += fmt.Sprintf(" --lts")
 	} else if test.system == "cros" {
@@ -424,7 +429,7 @@ func watchForAgents() {
 				st := scheduledTests[0]
 				if st.agent == agent {
 					scheduledTests = scheduledTests[1:]
-					runTestOnAgent(agent, getTestIndexFor(st.name, st.system, st.kernel))
+					runTestOnAgent(agent, getTestIndexFor(st.name, st.system, st.kernel), true)
 					continue
 				}
 			}
@@ -438,7 +443,7 @@ func watchForAgents() {
 				continue
 			}
 
-			runTestOnAgent(agent, index)
+			runTestOnAgent(agent, index, false)
 		}
 
 		text += "<br />"
@@ -518,9 +523,9 @@ func main() {
 	initTests()
 
 	w = ui.NewWindow()
+	w.Bind("", events)
 	w.Bind("StartButton", startTests)
 	ui.Bind(w, "scheduleTestOnAgent", scheduleTestOnAgent)
-	w.Show("index.html")
-	w.Bind("", events)
+	w.ShowBrowser("index.html", ui.ChromiumBased)
 	ui.Wait()
 }

@@ -18,7 +18,7 @@ test()
 	local text="pr_info(\"test\");"
 	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernelAndBuild $KERNEL_VER +CONFIG_NF_SOCKET_IPV6 +CONFIG_NF_TPROXY_IPV6
+	prepareKernelAndDeploy $KERNEL_VER +CONFIG_NF_SOCKET_IPV6 +CONFIG_NF_TPROXY_IPV6
 
 	git -C "$srcDir" apply "`pwd`/$MAIN_PATH/5_10/test.patch" 2>/dev/null
 

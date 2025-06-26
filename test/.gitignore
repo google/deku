@@ -4,3 +4,4 @@ testing_rsa
 logs
 pass_test
 monitor/__debug_bin*
+tags/target

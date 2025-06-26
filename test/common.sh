@@ -300,9 +300,9 @@ export -f remoteShOut
 runCmd()
 {
 	if [[ $LOCAL_TEST != "" ]]; then
-		bash -c "$@" | tee -a $LOG_FILE
+		$@ | tee -a $LOG_FILE
 	elif [[ $CHROMEOS != "" ]]; then
-		bash -c "$@" | tee -a $LOG_FILE
+		$@ | tee -a $LOG_FILE
 	elif [[ $VM_TEST != "" ]]; then
 		remoteShOut "cd deku; $@"
 	else
@@ -317,7 +317,7 @@ copyToRemote()
 	elif [[ $CHROMEOS != "" ]]; then
 		REMOTE_OUT=$(scp -i /mnt/host/source/testing_rsa -P $CROS_SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$1" root@localhost:"$2")
 	elif [[ $VM_TEST != "" ]]; then
-		REMOTE_OUT=$(cp "$1" "/tmp/deku-vm-mount/$2")
+		REMOTE_OUT=$(cp -rf "$1" "/tmp/deku-vm-mount/$2")
 	else
 		REMOTE_OUT=$(scp -r -P $SSH_PORT $SSHPARAMS "$1" root@localhost:"$2")
 	fi
@@ -365,7 +365,13 @@ buildDir()
 	if [[ $LOCAL_TEST != "" ]]; then
 		getLocalKernelDir
 	elif [[ $CHROMEOS != "" ]]; then
-		[[ $kernelVersion != "" ]] && { echo "/mnt/host/source/src/third_party/kernel/$kernelVersion" ; return; }
+		if [[ $kernelVersion != "" ]]; then
+			# replace in the kernelVersion "." with "_"
+			kerndir=${kernelVersion//./_}
+			kerndir=${kerndir//v/}
+			echo "$basedir/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$kerndir"
+			return
+		fi
 		local kerndir=`find "$basedir/build/${CROS_BOARD}/var/db/pkg/sys-kernel/" -type f -name "chromeos-kernel-*"`
 		kerndir=`basename $kerndir`
 		kerndir=${kerndir%-9999*}
@@ -510,8 +516,14 @@ checkIfFileExists()
 }
 export -f checkIfFileExists
 
-buildKernel()
+buildKernelToLaunch()
 {
+	local onlyBuild=
+	if [[ $1 == "--onlyBuild" ]]; then
+		onlyBuild=1
+		shift
+	fi
+
 	local extraparams=$1
 	local logFile=$(logFile build)
 	local srcDir=$(sourceDir $KERNEL_VER)
@@ -525,6 +537,7 @@ buildKernel()
 		logInfo "Building the kernel..."
 		remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1 &
 		USE="pcserial tty_console_ttyS0 livepatch" emerge-${CROS_BOARD} chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION > $logFile 2>&1 || return 1
+		[[ $onlyBuild ]] && return 0
 		for i in $(seq 1 10); do
 			/mnt/host/source/src/scripts/update_kernel.sh --remote localhost --board=${CROS_BOARD} --clean --ssh_port $CROS_SSH_PORT >> $logFile 2>&1 && break
 			logInfo "Re-run update the kernel"
@@ -541,11 +554,14 @@ time make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
 ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
 	>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
 	exit 1;
-};
+};"
+		if [[ $onlyBuild == "" ]]; then
+			cmd+="
 sudo apt install -y --allow-downgrades ./linux-image-*_amd64.deb ./linux-headers-*_amd64.deb 2>&1;
 sudo ./update_grub.sh;
 sudo ./update_grub.sh test;
-		"
+"
+		fi
 		remoteShOut "$cmd" > $logFile || { logErr "Fail to build kernel"; return 1; }
 		return
 	fi
@@ -555,7 +571,7 @@ sudo ./update_grub.sh test;
 	yes "" | make $extraparams -C "$srcDir" O="$buildDir" oldconfig > $logFile 2>&1
 	docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 }
-export -f buildKernel
+export -f buildKernelToLaunch
 
 enableKernelConfig()
 {
@@ -597,12 +613,15 @@ prepareKernel()
 			local tag=
 			if [[ $version == v6.11 ]]; then
 				tag="Ubuntu-hwe-6.11-6.11.0-17.17_24.04.2"
+			elif [[ $version == v6.14 ]]; then
+				tag="hwe-6.14-next"
 			else
 				tag="Ubuntu-6.8.0-49.49"
 			fi
 			srcDir="\$HOME/linux"
 			local currentTag=$(remoteShOut git -C $srcDir describe --exact-match --tags)
 			[[ "$currentTag" != "$tag" ]] && echo "Remove old linux dir" && remoteSh "rm -rf $srcDir; mkdir $srcDir"
+			# git worktree add ../v6.14 hwe-6.14-next
 			local cmd="
 if [ -z \"\$(ls -A $srcDir)\" ]; then
 	echo 'Prepare kernel from $tag...';
@@ -686,9 +705,19 @@ prepareKernelAndBuild()
 	local extraparams=
 	[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
 	prepareKernel $@
-	buildKernel "$extraparams"
+	buildKernelToLaunch --onlyBuild "$extraparams"
 }
 export -f prepareKernelAndBuild
+
+prepareKernelAndDeploy()
+{
+	local usellvm=$2
+	local extraparams=
+	[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
+	prepareKernel $@
+	buildKernelToLaunch "$extraparams"
+}
+export -f prepareKernelAndDeploy
 
 initDEKU()
 {
@@ -801,31 +830,42 @@ dekuDeploy()
 	local logFile=$(logFile)
 	local out=
 	local printOut=
+	local builddir=
 	if [[ $1 == "--log" ]]; then
 		printOut=1
 		shift
 	fi
 
+	# iterate over parameters and check if any parameter is "-b" or "--builddir" set the builddir from the next parameter
+	for (( i=0; i < "$#"; i++ )); do
+		if [[ ${!i} == "-b" || ${!i} == "--builddir" ]]; then
+			local nextIdx=$(($i+1))
+			builddir=${!nextIdx}
+		fi
+	done
+
 	if [[ $LOCAL_TEST != "" ]]; then
 		local kernelDir=$(getLocalKernelDir)
+		[[ $builddir == "" ]] && builddir=$kernelDir
 		out=$(./deku --workdir="$WORKDIR" \
-					 --builddir=$kernelDir \
+					 --builddir=$builddir \
 					 $@ 2>&1)
 	elif [[ "${TEST_ON_CHROMEBOOK}" != "" || "${CHROMEOS}" != "" ]]; then
+		[[ $builddir != "" ]] && builddir="--builddir=$builddir"
 		out=$(./deku --workdir="$WORKDIR" \
 					 --target="$DEPLOY_PARAMS" \
+					 $builddir \
 					 $@ 2>&1)
 	elif [[ $VM_TEST != "" ]]; then
+		[[ $builddir == "" ]] && builddir="../linux"
 		out=$(remoteShOut "cd deku; ./deku --workdir=workdir_test \
-					 --builddir=../linux \
+					 --builddir=$builddir \
 					 $@" 2>&1)
 	else
-	logInfo ./deku -v --workdir="$WORKDIR" \
-					 --builddir="/kernel/${BUILD_DIR##*/}" \
-			   		 --target="$DEPLOY_PARAMS" --ssh_options="${SSHPARAMS}"
+		[[ $builddir == "" ]] && builddir="/kernel/${BUILD_DIR##*/}"
 		out=$(docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest \
 			./deku --workdir="$WORKDIR" \
-				   --builddir="/kernel/${BUILD_DIR##*/}" \
+				   --builddir="$builddir" \
 			   	   --target="$DEPLOY_PARAMS" --ssh_options="${SSHPARAMS}" \
 				   $@ 2>&1)
 	fi

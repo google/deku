@@ -19,7 +19,7 @@ test()
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"$text\");"
 
-	buildKernel || exitError 1
+	buildKernelToLaunch || exitError 1
 	runQemu
 
 	sed -i s/$text/$newtext/g "$srcDir/$file"

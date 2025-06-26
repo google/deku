@@ -21,7 +21,7 @@ test()
 	local functionHeader2="static int drm_atomic_plane_set_property"
 	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernelAndBuild $KERNEL_VERSION_5_15
+	prepareKernelAndDeploy $KERNEL_VERSION_5_15
 	runQemu
 
 	appendToFunction "$srcDir/$file1" $function1 "cursor_x = 1;\ncursor_y = 1;"

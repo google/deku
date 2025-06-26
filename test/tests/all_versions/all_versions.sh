@@ -20,11 +20,11 @@ functionCallTest()
 	local text="DEKU $function test"
 	local srcDir=$(sourceDir $KERNEL_VER)
 
-	prepareKernelAndBuild $kernelversion
+	prepareKernelAndDeploy $kernelversion
 	if [[ $? != 0 ]]; then
 		make -C "$srcDir" mrproper
 		rm -rf $QEMU_BUILD_DIR
-		prepareKernelAndBuild $kernelversion
+		prepareKernelAndDeploy $kernelversion
 	fi
 
 	runQemu

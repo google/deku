@@ -91,7 +91,7 @@ test()
 	local srcDir=$(sourceDir $KERNEL_VER)
 	local file="$srcDir/net/ipv4/tcp_ipv4.c"
 
-	prepareKernelAndBuild $KERNEL_VER || exitError 1
+	prepareKernelAndDeploy $KERNEL_VER || exitError 1
 	runQemu
 
 	logStep "Add code that contains static keys usage"
@@ -115,7 +115,7 @@ test()
 	logStep "Modify code wrapped with built-in static keys"
 	sed -i 's/DEFINE_STATIC_KEY_TRUE(statickey_test);/DEFINE_STATIC_KEY_FALSE(statickey_test);/g' "$file"
 	sed -i 's/static_branch_disable(\&statickey_test);/static_branch_enable(\&statickey_test);/g' "$file"
-	buildKernel || exitError 8
+	buildKernelToLaunch || exitError 8
 	runQemu
 
 	remoteSh $cmd
@@ -138,7 +138,7 @@ test()
 
 	addStaticCall
 
-	buildKernel || exitError 14
+	buildKernelToLaunch || exitError 14
 	runQemu
 
 	remoteSh $cmd

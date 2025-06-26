@@ -47,7 +47,7 @@ checkAndResolveDep()
 
 test()
 {
-	prepareKernelAndBuild $KERNEL_VER +CONFIG_INPUT_UINPUT +CONFIG_HID_LOGITECH_HIDPP
+	prepareKernelAndDeploy $KERNEL_VER +CONFIG_INPUT_UINPUT +CONFIG_HID_LOGITECH_HIDPP
 	runQemu
 
 	# checkAndResolveDep drivers/input/misc/uinput.c uinput_request_send uinput

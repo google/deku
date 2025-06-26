@@ -40,7 +40,7 @@ checkElfStruct()
                            "_$filename.ko" "._$filename.ko.cmd" "_$filename.mod" "_$filename.mod.c" "._$filename.mod.cmd" "_$filename.mod.o"
                            "._$filename.mod.o.cmd" "._$filename.o.cmd")
 
-	prepareKernelAndBuild $KERNEL_VER
+	prepareKernelAndDeploy $KERNEL_VER
 
 	appendToFunction "$srcDir/$srcfile" $fun "$text"
 

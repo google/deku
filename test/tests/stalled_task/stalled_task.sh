@@ -9,6 +9,12 @@ FILES="mm/oom_kill.c"
 DESCRIPTION="Stalled task"
 . test/common.sh
 
+setCpuOnlineState()
+{
+	local en=$1
+	remoteSh "for i in \$(seq 2 \$(nproc)); do echo $1 | $sudoCmd tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
+}
+
 stalledTaskTest()
 {
 	local srcDir=$(sourceDir $KERNEL_VER)
@@ -18,8 +24,9 @@ stalledTaskTest()
 
 	local sudoCmd=
 	[[ $VM_TEST != "" ]] && sudoCmd="sudo"
-	remoteSh "for i in \$(seq 2 \$(nproc)); do echo 0 | $sudoCmd tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
-	out=$(dekuDeploy --log) && { logErr "Fail"; exitError 1; }
+	setCpuOnlineState 0
+	out=$(dekuDeploy --log) && { setCpuOnlineState 1; logErr "Fail"; exitError 1; }
+	setCpuOnlineState 1
 
 	grep -q "The oom_reaper \[PID: [0-9][0-9]*\] blocks the application of changes" <<< "$out" || { logErr "Fail"; exitError 2; }
 	grep -q "^Failed to apply changes\b" <<< "$out" || { logErr "Fail"; exitError 3; }

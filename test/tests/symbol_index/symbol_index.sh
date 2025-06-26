@@ -69,7 +69,7 @@ test()
 		modifyFunction ${files[$i]} ${functions[$i]} "DEKU_TEST_INDEX" $((i+1))
 	done
 
-	buildKernel || exitError 1
+	buildKernelToLaunch || exitError 1
 
 	revertChanges
 

@@ -1,0 +1,35 @@
+diff --git a/module.c b/module.c
+index af843fc..0f46d23 100644
+--- a/module.c
++++ b/module.c
+@@ -13,7 +13,7 @@ static struct proc_dir_entry *proc_entry;
+ 
+ static ssize_t proc_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+ {
+-	return helper_proc_read(buf, count, pos, 0);
++	return helper_proc_read(buf, count, pos, 1);
+ }
+ 
+ static const struct proc_ops proc_fops = {
+diff --git a/module_helper.c b/module_helper.c
+index 47b3391..f45c725 100644
+--- a/module_helper.c
++++ b/module_helper.c
+@@ -14,7 +14,7 @@ void helper_print_message(const char *message)
+ 
+ int helper_calculate(int x)
+ {
+-	return x * 2;
++	return x * 2 + 1;
+ }
+ 
+ ssize_t helper_proc_read(char __user *usr_buf, size_t count, loff_t *pos, int param_value)
+@@ -28,7 +28,7 @@ ssize_t helper_proc_read(char __user *usr_buf, size_t count, loff_t *pos, int pa
+ 
+ 	len = snprintf(buffer, sizeof(buffer),
+ 				  "DEKU test procfs. Param value: %d\n",
+-				  param_value);
++				  helper_calculate(param_value));
+ 
+ 	if (len > count) {
+ 		return -EINVAL;
