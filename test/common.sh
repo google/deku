@@ -152,6 +152,15 @@ waitForSystemBootUp()
 			ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "exit 0"
 			if [[ $? == 0 ]]; then
 				remoteSh "uname -a"
+				mount | grep -q "/tmp/deku-vm-mount"
+				if [[ $? != 0 ]]; then
+					find /tmp/deku-vm-mount -mindepth 1 -maxdepth 1 | read
+					if [[ $? == 0 ]]; then
+						logErr "Mount point is not empty. Remove it."
+						rm -rf /tmp/deku-vm-mount
+					fi
+				fi
+				mkdir -p /tmp/deku-vm-mount
 				find /tmp/deku-vm-mount -mindepth 1 -maxdepth 1 | read || sshfs -p $SSH_PORT $SSHPARAMS -o idmap=user -o cache=no test@localhost: /tmp/deku-vm-mount
 				sync
 				sleep 0.5
@@ -187,7 +196,7 @@ runQemu()
 	local extraparams=
 	local qemuexec="qemu-system-x86_64"
 	local diskParam=
-	local useVirtIO=1
+	local useVirtIO=
 
 	if [[ $useVirtIO != "" ]]; then
 		# replace in cmdline "dev/sda" with "dev/vda"

@@ -1,7 +1,7 @@
 rootfs.img
 rootfs.qcow2
 testing_rsa
-logs
+logs/*
 pass_test
 monitor/__debug_bin*
 tags/target

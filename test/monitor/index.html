@@ -10,7 +10,7 @@
 				color: AliceBlue;
 				font: 16px sans-serif;
 				text-align: center;
-				margin-top: 10px;
+				margin-top: 5px;
 			}
 			button {
 				margin: 5px 0 10px;
@@ -25,23 +25,25 @@
 		<link rel="stylesheet" href="style.css">
 	</head>
 	<body onload="myFunction()">
-		<button id="StartButton">Start tests</button>
-		<br>
-		<div id="container">
-			<div id="left">Agents:</div>
-			<div id="middle"><div id="agents"></div></div>
-			<div id="right"></div>
+		<div style="display: flex;">
+			<div>
+				<button id="StartButton">Start tests</button>
+			</div>
+			<div>
+				<div id="container">
+					<div id="left">Agents:</div>
+					<div id="middle"><div id="agents"></div></div>
+					<div id="right"></div>
+				</div>
+			</div>
 		</div>
-
 
 		<div role="region" aria-labelledby="caption" tabindex="0">
 			<table>
 			  <thead>
 				<tr id="zz">
 				  <th rowspan="2" id="tableHeadElement">Test</th>
-				  <!-- <th>1</th>
-				  <th>2</th>
-				  <th>3</th>
+				  <!-- <th colspan="3">1</th>
 				  <th>4</th>
 				  <th>5</th>
 				  <th>6</th>

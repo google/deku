@@ -51,7 +51,7 @@ test()
 	functionCallTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "wget -q --spider google.com"
 	functionCallTest "fs/timerfd.c" "timerfd_triggered" "sleep 2; dmesg | grep -q timerfd_triggered || { grep -q CHROMEOS /etc/lsb-release && /usr/local/autotest/bin/autologin.py > /dev/null 2>&1; }"
 	functionCallTest "fs/readdir.c" "filldir64" "sleep 2"
-	if [[ $KERNEL_VER == v6.14* ]]; then
+	if [[ $KERNEL_VER == v6.14* || $KERNEL_VER == v6.15* ]]; then
 		functionCallTest "mm/vma.c" "mmap_region" "sleep 2"
 	else
 		functionCallTest "mm/mmap.c" "mmap_region" "sleep 2"

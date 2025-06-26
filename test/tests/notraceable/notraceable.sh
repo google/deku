@@ -152,7 +152,7 @@ test()
 		return
 	fi
 
-	if [[ $KERNEL_VER == v6.14* ]]; then
+	if [[ $KERNEL_VER == v6.14.* || $KERNEL_VER == v6.15-* ]]; then
 		checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok f:cpuidle_enter_s2idle
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		checkNontraceable drivers/md/dm-table.c dm_table_get_size fail
@@ -163,8 +163,7 @@ test()
 	checkNontraceable drivers/net/wireless/ath/ath10k/pci.c ath10k_pci_write32 fail # v:ath10k_pci_hif_ops
 	checkNontraceable drivers/net/wireless/ath/ath10k/pci.c ath10k_pci_read32 fail # v:ath10k_pci_hif_ops
 
-	if [[ $KERNEL_VER == v6.8 || $KERNEL_VER == v6.11 ]]; then
-		logInfo xxxxxxxxxxxxXXXXXXXXXXXXXXXXXXX
+	if [[ $KERNEL_VER == v6.8 || $KERNEL_VER == v6.11 || $KERNEL_VER == v6.14 ]]; then
 		if [[ $VM_TEST ]]; then
 			remoteSh "sudo modprobe drm_display_helper"
 		fi

@@ -34,6 +34,18 @@ fn add_before_function(fun: &Function, text: &String, buffer: &mut Vec<u8>) {
 	buffer.splice(fun.pos..fun.pos, slice);
 }
 
+fn find_regex_from_position(buffer: &[u8], start_pos: usize, regex: &Regex) -> Option<(usize, usize)> {
+    let text = String::from_utf8_lossy(&buffer[start_pos..]);
+    if let Some(caps) = regex.captures(&text) {
+        if let Some(m) = caps.get(0) {
+            let match_start = start_pos + m.start();
+            let match_end = start_pos + m.end();
+            return Some((match_start, match_end));
+        }
+    }
+    None
+}
+
 fn main() -> io::Result<()> {
 	let mut file_path = "";
 	let args: Vec<String> = env::args().collect();
@@ -128,6 +140,30 @@ fn main() -> io::Result<()> {
             continue;
         }
         if c == '#' && prev_char == '\n' {
+            // check if it's "#ifdef CONFIG_XXX"
+            let result = find_regex_from_position(&buffer, i, &Regex::new(r"#ifdef").unwrap());
+            let ifdef_config_suspend = find_regex_from_position(&buffer, i, &Regex::new(r"#ifdef CONFIG_SUSPEND").unwrap());
+            if !result.is_none() && result.unwrap().0 == i && !(!ifdef_config_suspend.is_none() && result.unwrap().0 == ifdef_config_suspend.unwrap().0) {
+                let endif_result = find_regex_from_position(&buffer, result.unwrap().1, &Regex::new(r"#endif").unwrap());
+                if !endif_result.is_none() {
+                    let j = endif_result.unwrap().1;
+                    while i < j
+                    {
+                        if buffer[i] as char == '\n' {
+                            content.push('\n');
+                        } else {
+                            content.push(' ');
+                        }
+                        prev_char = buffer[i] as char;
+                        i += 1;
+                    }
+                    continue;
+                } else {
+                    println!("Can't find #endif");
+                    exit(1);
+                }
+            }
+
             // pre-processor
             while i < buffer.len() - 1
                 && !(buffer[i - 1] as char != '\\' && buffer[i] as char == '\n')
@@ -158,7 +194,7 @@ fn main() -> io::Result<()> {
                     cnt += 1;
                 } else if buffer[i] as char == '}' {
                     cnt -= 1;
-                    if cnt == 0 {
+                    if cnt == 0 || /* force end function if the close bracket is at very beginning of the line */ buffer[i - 1] as char == '\n'{
                         break;
                     }
                 }

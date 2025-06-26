@@ -37,7 +37,7 @@ table {
     padding: 4px 5px;
     text-align: center;
   }
-  
+
   table tbody th {
     font-weight: 100;
     font-style: italic;
@@ -70,7 +70,7 @@ table {
     left: 0;
     z-index: 5;
   }
-  
+
   [role="region"][aria-labelledby][tabindex] {
     width: 100%;
     max-height: 98vh;

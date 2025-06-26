@@ -154,16 +154,13 @@ expectedPatches_6_12=(
 	patch_f3cfb068_hid_redragon
 )
 
-expectedPatches_6_14=(
+expectedPatches_6_15=(
 	patch_0711c614_hid_monterey
 	patch_147bf8e3_hid_sunplus
 	patch_1eee55b7_hid_petalynx
 	patch_2f40cdee_hid_microsoft
-	patch_359d05e2_hid_lg_g15
-	patch_3a233479_hid_lg4ff
 	patch_6874adef_hid_topseed
 	patch_7875d817_hid_gyration
-	patch_858f5e18_hid_lg
 	patch_85afc72e_hid_apple
 	patch_931559de_hid_pl
 	patch_a1df7423_hid_cherry
@@ -604,6 +601,7 @@ expectedPatches_ubuntu_6_14=(
 	"patch_4d225dd8_hid_mcp2221"
 	"patch_a604ec0f_hid_ite"
 	"patch_fe3af69e_hid_nvidia_shield"
+	"patch_38e9af8b_hid_corsair_void"
 )
 
 test()
@@ -636,8 +634,8 @@ test()
 		expectedPatches="${expectedPatches_6_6[@]}"
 	elif [[ "$KERNEL_VER" == "v6.12."* ]]; then
 		expectedPatches="${expectedPatches_6_12[@]}"
-	elif [[ "$KERNEL_VER" == "v6.14-"* ]]; then
-		expectedPatches="${expectedPatches_6_14[@]}"
+	elif [[ "$KERNEL_VER" == "v6.15-"* ]]; then
+		expectedPatches="${expectedPatches_6_15[@]}"
 
 	elif [[ "$KERNEL_VER" == "v6.8" ]]; then
 		expectedPatches="${expectedPatches_ubuntu_6_8[@]}"

@@ -31,7 +31,7 @@ checkNoValidChanges()
 	out=$(dekuBuild --log) || { logErr "Fail"; exit 4; }
 	logStep "OK"
 
-	logStep -n "Check reverting changes... "
+	logStep "Check reverting changes... "
 	git -C "$srcDir" checkout $file 2>/dev/null
 	appendToFunction "$srcDir/$file" $novalidfunction "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU test\");"
 	out=$(dekuDeploy --log -v)
