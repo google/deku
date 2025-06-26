@@ -16,6 +16,8 @@
 
 #include "disassembler.h"
 
+#define KSYM_NAME_LEN 512
+
 /*
  * @return 0 on success, otherwise non-zero
  */
@@ -407,7 +409,8 @@ static size_t copySymbol(Context *ctx, size_t index, bool copySec)
 	}
 	else // mark symbol as "external"
 	{
-		newSym.st_shndx = 0;
+		if (originSym.st_shndx != SHN_ABS)
+			newSym.st_shndx = 0;
 		newSym.st_size = 0;
 		// make it global as LLVM drops the symbol if it will be LOCAL
 		newSym.st_info = ELF64_ST_INFO(STB_WEAK, symType);
@@ -725,6 +728,7 @@ static int markSymbolsToCopy(Context *ctx, bool *symToCopy, const char *symbols)
 {
 	GElf_Sym sym;
 	size_t symIndex;
+	char name[KSYM_NAME_LEN + sizeof("__cfi_")];
 
 	// mark the symbols to be copied from "symbols" text parameter
 	while (symbols[0] != '\0')
@@ -733,6 +737,14 @@ static int markSymbolsToCopy(Context *ctx, bool *symToCopy, const char *symbols)
 		if (comma)
 			*comma = '\0';
 		const char *symbol = symbols;
+
+		// copy CFI prefix function
+        sprintf(name, "__cfi_%s", symbol);
+		sym = getSymbolByName(ctx->elf, name, &symIndex, false);
+		if (!invalidSym(sym))
+		{
+		    symToCopy[symIndex] = true;
+		}
 
 		sym = getSymbolByName(ctx->elf, symbol, &symIndex, false);
 		if (invalidSym(sym))
@@ -868,6 +880,7 @@ static int copySymbols(Context *ctx, const char *filePath, const char *symbols)
 								   "__jump_table",
 								   ".return_sites",
 								   ".static_call_sites",
+								   ".kcfi_traps",
 								  };
 	for (size_t i = 0; i < sizeof(extraSections) / sizeof(*extraSections); i++)
 	{
@@ -1271,6 +1284,10 @@ int trimSectionsData(Context *ctx)
 	if (ret != 0)
 		return ret;
 
+	ret = trimSectionData(ctx, ".kcfi_traps", 1);
+	if (ret != 0)
+		return ret;
+
 	return ret;
 }
 
@@ -1381,6 +1398,67 @@ err:
 	return -1;
 }
 
+
+/*
+ * @return 0 on success, otherwise non-zero
+ */
+static int disableKCFITrapsInstr(Context *ctx)
+{
+	GElf_Shdr shdr;
+	GElf_Rela rela;
+
+	Elf_Scn *sec = getSectionByName(ctx->secondElf, ".kcfi_traps");
+	if (sec == NULL)
+		return 0;
+
+	if (gelf_getshdr(sec, &shdr) == NULL)
+		GOTO_ERR;
+
+	if (shdr.sh_size == 0 || shdr.sh_link == SHN_UNDEF)
+		return 0;
+
+	Elf_Scn *textSec = elf_getscn(ctx->secondElf, shdr.sh_link);
+	if (sec == NULL)
+		GOTO_ERR;
+
+	int index = elf_ndxscn(sec);
+	if (index == SHN_UNDEF)
+		GOTO_ERR;
+
+	Elf_Scn *relScn = getRelForSectionIndex(ctx->secondElf, index);
+	Elf_Data *relData = elf_getdata(relScn, NULL);
+	if (relData == NULL)
+		GOTO_ERR;
+
+	Elf_Data *secData = elf_getdata(textSec, NULL);
+	if (secData == NULL)
+		GOTO_ERR;
+
+	if (gelf_getshdr(relScn, &shdr) == NULL)
+		GOTO_ERR;
+
+	size_t cnt = shdr.sh_size / shdr.sh_entsize;
+	if (cnt == 0)
+		GOTO_ERR;
+
+	for (size_t i = 0; i < cnt; i++)
+	{
+		if (gelf_getrela(relData, i, &rela) == NULL)
+			GOTO_ERR;
+#if 0
+		uint32_t *tag = (uint32_t *)(secData->d_buf + rela.r_addend - 10);
+		*tag = -*tag;
+#endif
+		uint16_t *ud2 = (uint16_t *)(secData->d_buf + rela.r_addend);
+		*ud2 = 0x9066; // nop instruction
+	}
+
+	return 0;
+
+err:
+	return -1;
+}
+
 /*
  * @return 0 on success, otherwise non-zero
  */
@@ -1424,6 +1502,10 @@ int extractSymbols(const char *filePath, const char *outFile, const char *symToC
 		goto err;
 
 	res = clearInvalidFunctions(&ctx);
+	if (res != 0)
+		goto err;
+
+	res = disableKCFITrapsInstr(&ctx);
 	if (res != 0)
 		goto err;
 

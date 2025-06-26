@@ -7,7 +7,6 @@
 
 #include "libelfutils.h"
 
-
 #if DISASSEMBLY_STYLE_SUPPORT == 0
 	#undef DISASSEMBLY_STYLE_SUPPORT
 #endif
