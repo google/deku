@@ -242,6 +242,50 @@ err:
 	return 0;
 }
 
+/*
+ * Check if the disassembly differs due to a changed __LINE__ value.
+ */
+static bool disassemblyDiffersByLine(char *disassembled1, char *disassembled2)
+{
+	char *line1 = disassembled1;
+	char *line2 = disassembled2;
+	while (line1 != NULL && line2 != NULL)
+	{
+		char *nextLine1 = strchr(line1, '\n');
+		char *nextLine2 = strchr(line2, '\n');
+		size_t len1 = (nextLine1 == NULL) ? strlen(line1) : (nextLine1 - line1);
+		size_t len2 = (nextLine2 == NULL) ? strlen(line2) : (nextLine2 - line2);
+
+		if (len1 != len2 || memcmp(line1, line2, len1) != 0)
+		{
+			// check if line is like: "mov    $0x1234,%esi"
+			if (strstr(line1, "mov    $0x") == line1 && strstr(line2, "mov    $0x") == line2)
+			{
+				const char *end1 = strchr(line1, ',');
+				const char *end2 = strchr(line2, ',');
+				if (end1 != NULL && end2 != NULL && (end1 - line1) == (end2 - line2) &&
+					memcmp(end1, end2, len1 - (end1 - line1)) == 0)
+				{
+					LOG_DEBUG("Ignoring difference in mov instruction: %.*s\t|\t%.*s", (int)len1, line1, (int)len2, line2);
+				}
+				else
+				{
+					return false;
+				}
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		line1 = (nextLine1 == NULL) ? NULL : nextLine1 + 1;
+		line2 = (nextLine2 == NULL) ? NULL : nextLine2 + 1;
+	}
+
+	return line1 == NULL && line2 == NULL;
+}
+
 /**
  * @return: 1 as equals, 0 non equals, -1 error
  */
@@ -324,6 +368,12 @@ static int equalFunctions(Context *ctx, const char *funName)
 			isEqual = strcmp(strchr(disassembled1, '\n'), strchr(disassembled2, '\n')) == 0;
 		else
 			isEqual = strcmp(disassembled1, disassembled2) == 0;
+
+		if (!isEqual)
+		{
+			// check if disassemblies differ due to a changed __LINE__ value.
+			isEqual = disassemblyDiffersByLine(disassembled1, disassembled2);
+		}
 
 		free(disassembled1);
 		free(disassembled2);
