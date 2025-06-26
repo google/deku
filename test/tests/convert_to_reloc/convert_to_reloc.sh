@@ -23,8 +23,22 @@ test()
 		[[ $fun == "napi_complete_done" ]] && return
 		[[ $fun == "__ip_rt_update_pmtu" ]] && return
 	fi
+
+	if [[ $VM_TEST != "" ]]; then
+		mkdir -p $WORKDIR/../$file
+		cp $dir/$file/$file.o $WORKDIR/../$file/$file.o
+		cp $dir/$file/$fun.dis $WORKDIR/../$file/$fun.dis
+		originDir=$dir
+		dir=.
+		outDisFile=$(basename $outDisFile)
+	fi
+
 	logStep -n "$file $fun... "
-	runCmd "./elfutils --disassemble -f $dir/$file/$file.o -s $fun -r" > $outDisFile
+	runCmd "./elfutils --disassemble -f $dir/$file/$file.o -s $fun -r > $outDisFile"
+	if [[ $VM_TEST != "" ]]; then
+		outDisFile=$WORKDIR/../$outDisFile
+		dir=$originDir
+	fi
 	sed -i 's/ *$//' $outDisFile
 	sed -ri 's/shr    \$1,(.+)/shr    \1/' $outDisFile
 	sed -ri 's/sar    \$1,(.+)/sar    \1/' $outDisFile

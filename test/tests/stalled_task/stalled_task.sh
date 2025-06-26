@@ -16,7 +16,9 @@ stalledTaskTest()
 	logStep -n "Check if stalled task is properly detected... "
 	sed -i "s/oom_reap_task(tsk);/{oom_reap_task(tsk);pr_info(\"\");}/g" "$srcDir/mm/oom_kill.c"
 
-	remoteSh "for i in \$(seq 2 \$(nproc)); do echo 0 | sudo tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
+	local sudoCmd=
+	[[ $VM_TEST != "" ]] && sudoCmd="sudo"
+	remoteSh "for i in \$(seq 2 \$(nproc)); do echo 0 | $sudoCmd tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
 	out=$(dekuDeploy --log) && { logErr "Fail"; exitError 1; }
 
 	grep -q "The oom_reaper \[PID: [0-9][0-9]*\] blocks the application of changes" <<< "$out" || { logErr "Fail"; exitError 2; }

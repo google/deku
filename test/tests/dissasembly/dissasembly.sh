@@ -18,13 +18,22 @@ test()
 
 	local dir=test/tests/dissasembly/files
 
-	runCmd "./elfutils --disassemble -f $dir/$file.o -s $fun"
-	runCmd "./elfutils --disassemble -f $dir/$file.o -s $fun" > $outFile
+	if [[ $VM_TEST != "" ]]; then
+		# cp $dir/$file.o $WORKDIR/../$file.o
+		# cp $dir/$fun.dis $WORKDIR/../$fun.dis
+		copyToRemote $dir/$file.o
+		copyToRemote $dir/$fun.dis
+		runCmd "mv ../$file.o $file.o"
+		runCmd "mv ../$fun.dis $fun.dis"
+		dir=.
+	fi
+
+	runCmd "./elfutils --disassemble -f $dir/$file.o -s $fun > $outFile"
 	sed -i 's/ *$//' $outFile
 	sed -i 's/\r/\n/g; s/\n$//' $outFile
 	logStep -n "$file $fun... "
 	# cp $outFile $dir/$fun.dis
-	cmp $outFile $dir/$fun.dis || { \
+	runCmd cmp $outFile $dir/$fun.dis || { \
 		echo >> $LOG_FILE; \
 		diff -y $outFile $dir/$fun.dis >> $LOG_FILE; \
 		logErr "Failed"; \

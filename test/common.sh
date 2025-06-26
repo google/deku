@@ -183,9 +183,17 @@ runQemu()
 	local buildDir=$BUILD_DIR
 	[[ $kernelVer != "" ]] && buildDir=$(buildDir $kernelVer)
 	local KERNEL_IMAGE="$buildDir/arch/x86/boot/bzImage"
-	local cmdline="console=ttyS0 root=/dev/vda rw"
+	local cmdline="console=ttyS0 root=/dev/sda rw"
 	local extraparams=
 	local qemuexec="qemu-system-x86_64"
+	local diskParam=
+	local useVirtIO=1
+
+	if [[ $useVirtIO != "" ]]; then
+		# replace in cmdline "dev/sda" with "dev/vda"
+		cmdline=${cmdline//dev\/sda/dev\/vda}
+		diskParam="if=virtio,"
+	fi
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		return
@@ -239,14 +247,14 @@ runQemu()
 		# Wait a bit of time before start next instance of qemu
 		sleep 0.5
 		while true; do
-			kill -9 $(ps aux | grep "$SSH_PORT" | grep "qemu" | cut -d' ' -f2) 2>/dev/null
+			ps aux | grep "$SSH_PORT" | grep -q "qemu" && lsof -i:"$SSH_PORT" -Fp | grep -oP "p\K.*" | xargs kill -9
 			sleep 0.2
 			ps aux | grep "$SSH_PORT" | grep -q "qemu" && \
 				logDebug "Waiting for close previous qemu instance" || break
 			sleep 0.8
 		done
 		logInfo "Starting QEMU..."
-		$qemuexec -kernel "$KERNEL_IMAGE" -drive if=virtio,format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
+		$qemuexec -kernel "$KERNEL_IMAGE" -drive ${diskParam}format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
 				-append "$cmdline" -serial file:$logFile -smp 4 -m 256 \
 				-device virtio-net-pci,netdev=net0,romfile="" \
 				-vnc none -netdev type=user,id=net0 \

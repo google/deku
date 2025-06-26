@@ -5,7 +5,7 @@
 all: test/tags/tags
 
 test/tags/tags: test/tags/src/main.rs
-	@cargo -Z unstable-options -C test/tags build
+	cd test/tags; cargo build; cd -
 	@mv test/tags/target/debug/tags test/tags/
 
 clean::

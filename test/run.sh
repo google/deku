@@ -394,13 +394,17 @@ main()
 	local srcDir=$(sourceDir $kernVer)
 
 	if [[ $VM_TEST ]]; then
+		mkdir -p /tmp/deku-vm-mount
 		if mount | grep -qF "/tmp/deku-vm-mount"; then
 			# if /tmp/deku-vm-mount is empty then umount /tmp/deku-vm-mount
-			[[ -z "$(ls -A /tmp/deku-vm-mount)" ]] && umount /tmp/deku-vm-mount
+			if [[ -z "$(ls -A /tmp/deku-vm-mount)" ]]; then
+				umount /tmp/deku-vm-mount
+				runQemu
+			fi
+			# use currently running instance
+		else
+			runQemu
 		fi
-
-		mkdir -p /tmp/deku-vm-mount
-		runQemu
 	fi
 
 	if [[ ! $CHROMEOS$VM_TEST ]]; then
