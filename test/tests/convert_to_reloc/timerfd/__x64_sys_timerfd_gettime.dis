@@ -1,0 +1,30 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+lea    -0x38(%rbp),%rsi
+sub    $0x30,%rsp
+mov    0x68(%rdi),%r12
+mov    0x70(%rdi),%rdi
+mov    %gs:0x28,%rax
+mov    %rax,-0x10(%rbp)
+xor    %eax,%eax
+call   do_timerfd_gettime
+test   %eax,%eax
+je     <__x64_sys_timerfd_gettime+0x4E>
+cltq
+mov    -0x10(%rbp),%rdx
+sub    %gs:0x28,%rdx
+jne    <__x64_sys_timerfd_gettime+0x69>
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk
+mov    %r12,%rsi
+lea    -0x38(%rbp),%rdi
+call   put_itimerspec64
+cmp    $0x1,%eax
+sbb    %rax,%rax
+not    %rax
+and    $0xfffffffffffffff2,%rax
+jmp    <__x64_sys_timerfd_gettime+0x35>
+call   __stack_chk_fail

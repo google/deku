@@ -1,0 +1,79 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r15
+push   %r14
+push   %r13
+push   %r12
+mov    %esi,%r12d
+push   %rbx
+cmpq   $0x0,-0xd8(%rdi)
+mov    %rdi,%rbx
+je     <process_backlog+0x44>
+cli
+mov    -0xd8(%rdi),%rdi
+test   %rdi,%rdi
+je     <process_backlog+0x124>
+movq   $0x0,-0xd8(%rbx)
+sti
+call   net_rps_send_ipi
+mov    0x0(%rip),%eax        # <process_backlog+0x4A>
+lea    -0x100(%rbx),%r13
+xor    %r15d,%r15d
+lea    -0x4(%rbx),%r14
+mov    %eax,0x18(%rbx)
+jmp    <process_backlog+0xA8>
+cmp    %rdi,%r13
+je     <process_backlog+0xB4>
+mov    -0xf0(%rbx),%eax
+sub    $0x1,%eax
+mov    %eax,-0xf0(%rbx)
+mov    (%rdi),%rdx
+mov    0x8(%rdi),%rax
+movq   $0x0,(%rdi)
+movq   $0x0,0x8(%rdi)
+mov    %rax,0x8(%rdx)
+mov    %rdx,(%rax)
+call   __netif_receive_skb
+call   rcu_read_unlock_strict
+add    $0x1,%r15d
+addl   $0x1,-0x90(%rbx)
+cmp    %r12d,%r15d
+jge    <process_backlog+0x112>
+mov    -0x100(%rbx),%rdi
+test   %rdi,%rdi
+jne    <process_backlog+0x5D>
+cli
+mov    %r14,%rdi
+call   _raw_spin_lock
+mov    -0x18(%rbx),%rdx
+lea    -0x18(%rbx),%rax
+cmp    %rdx,%rax
+je     <process_backlog+0x105>
+mov    -0x10(%rbx),%rcx
+mov    -0xf8(%rbx),%rsi
+mov    %rsi,0x8(%rdx)
+mov    %rdx,(%rsi)
+mov    %r13,(%rcx)
+mov    -0x8(%rbx),%edx
+mov    %rcx,-0xf8(%rbx)
+add    %edx,-0xf0(%rbx)
+mov    %rax,-0x18(%rbx)
+mov    %rax,-0x10(%rbx)
+movl   $0x0,-0x8(%rbx)
+movb   $0x0,-0x4(%rbx)
+sti
+jmp    <process_backlog+0xA8>
+movq   $0x0,0x10(%rbx)
+movb   $0x0,-0x4(%rbx)
+sti
+pop    %rbx
+mov    %r15d,%eax
+pop    %r12
+pop    %r13
+pop    %r14
+pop    %r15
+pop    %rbp
+jmp    __x86_return_thunk
+sti
+jmp    <process_backlog+0x44>

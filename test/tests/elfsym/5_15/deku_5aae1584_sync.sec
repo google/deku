@@ -1,0 +1,9 @@
+.shstrtab
+.strtab
+.symtab
+.text.unlikely.sync_filesystem
+.rela.text.unlikely.sync_filesystem
+.rodata.sync_filesystem.str1.1
+__bug_table
+.rela__bug_table
+.rodata.sync_filesystem.str1.8

@@ -1,0 +1,28 @@
+call   __fentry__
+xor    %eax,%eax
+cmpb   $0x0,0x0(%rip)        # <hpet_set_rtc_irq_bit+0xE>
+jne    <hpet_set_rtc_irq_bit+0x59>
+cmpq   $0x0,0x0(%rip)        # <hpet_set_rtc_irq_bit+0x18>
+je     <hpet_set_rtc_irq_bit+0x59>
+cmpb   $0x0,0x0(%rip)        # <hpet_set_rtc_irq_bit+0x21>
+je     <hpet_set_rtc_irq_bit+0x59>
+mov    0x0(%rip),%rax        # <hpet_set_rtc_irq_bit+0x2A>
+mov    %rax,%rdx
+or     %rdi,%rdx
+and    $0x10,%edi
+mov    %rdx,0x0(%rip)        # <hpet_set_rtc_irq_bit+0x3A>
+je     <hpet_set_rtc_irq_bit+0x4A>
+test   $0x10,%al
+jne    <hpet_set_rtc_irq_bit+0x4F>
+movl   $0xffffffff,0x0(%rip)        # <hpet_set_rtc_irq_bit+0x4A>
+test   %rax,%rax
+je     <hpet_set_rtc_irq_bit+0x5E>
+mov    $0x1,%eax
+jmp    __x86_return_thunk
+jmp    __x86_return_thunk
+push   %rbp
+mov    %rsp,%rbp
+call   hpet_rtc_timer_init.part.0
+mov    $0x1,%eax
+pop    %rbp
+jmp    __x86_return_thunk

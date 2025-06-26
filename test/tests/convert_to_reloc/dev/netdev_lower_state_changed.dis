@@ -1,0 +1,35 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %rbx
+mov    %rsi,%rbx
+sub    $0x20,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x10(%rbp)
+xor    %eax,%eax
+movq   $0x0,-0x20(%rbp)
+movq   $0x0,-0x18(%rbp)
+mov    %rdi,-0x28(%rbp)
+call   rtnl_is_locked
+test   %eax,%eax
+je     <netdev_lower_state_changed+0x68>
+lea    -0x28(%rbp),%rsi
+mov    $0x1b,%edi
+mov    %rbx,-0x18(%rbp)
+call   call_netdevice_notifiers_info
+mov    -0x10(%rbp),%rax
+sub    %gs:0x28,%rax
+jne    <netdev_lower_state_changed+0x94>
+mov    -0x8(%rbp),%rbx
+leave
+jmp    __x86_return_thunk
+cmpb   $0x0,0x0(%rip)        # <netdev_lower_state_changed+0x6F>
+jne    <netdev_lower_state_changed+0x3D>
+mov    $0x2034,%edx
+mov    $0x0,%rsi
+mov    $0x0,%rdi
+movb   $0x1,0x0(%rip)        # <netdev_lower_state_changed+0x8B>
+call   __warn_printk
+ud2
+jmp    <netdev_lower_state_changed+0x3D>
+call   __stack_chk_fail

@@ -1,0 +1,6 @@
+call   __fentry__
+push   %rbp
+mov    0x28(%rdi),%edi
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __do_sys_brk

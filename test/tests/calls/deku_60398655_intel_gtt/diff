@@ -1,0 +1,11 @@
+--- /build/brya/usr/src/chromeos-kernel-5_15-9999/drivers/gpu/drm/i915/gt/intel_gtt.c
++++ /build/brya/var/cache/portage/sys-kernel/chromeos-kernel-5_15/source/drivers/gpu/drm/i915/gt/intel_gtt.c
+@@ -164,7 +164,7 @@
+ /* lock the vm into the current ww, if we lock one, we lock all */
+ int i915_vm_lock_objects(struct i915_address_space *vm,
+ 			 struct i915_gem_ww_ctx *ww)
+-{
++{__asm__ __volatile__("nop");
+ 	if (vm->scratch[0]->base.resv == &vm->_resv) {
+ 		return i915_gem_object_lock(vm->scratch[0], ww);
+ 	} else {

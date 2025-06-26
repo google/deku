@@ -1,0 +1,63 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+mov    %rdi,%r12
+sub    $0x20,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x10(%rbp)
+xor    %eax,%eax
+jmp    <netif_rx_internal+0x60>
+jmp    <netif_rx_internal+0x7F>
+jmp    <netif_rx_internal+0xAF>
+lea    -0x18(%rbp),%rdx
+mov    %r12,%rdi
+mov    %gs:0x0(%rip),%esi        # <netif_rx_internal+0x3E>
+call   enqueue_to_backlog
+mov    -0x10(%rbp),%rcx
+sub    %gs:0x28,%rcx
+jne    <netif_rx_internal+0xF9>
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk
+mov    0x0(%rip),%eax        # <netif_rx_internal+0x66>
+test   %eax,%eax
+je     <netif_rx_internal+0x26>
+cmpq   $0x0,0x20(%rdi)
+jne    <netif_rx_internal+0x26>
+xor    %edi,%edi
+call   ktime_get_with_offset
+mov    %rax,0x20(%r12)
+jmp    <netif_rx_internal+0x26>
+mov    %gs:0x0(%rip),%eax        # <netif_rx_internal+0x86>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_rx_internal+0x90>
+jae    <netif_rx_internal+0x2B>
+mov    0x0(%rip),%rax        # <netif_rx_internal+0x99>
+test   %rax,%rax
+je     <netif_rx_internal+0xAA>
+mov    0x8(%rax),%rdi
+mov    %r12,%rsi
+call   __SCT__tp_func_netif_rx
+jmp    <netif_rx_internal+0x2B>
+lea    -0x18(%rbp),%rax
+mov    %rax,-0x20(%rbp)
+mov    0x10(%r12),%rdi
+lea    -0x20(%rbp),%rdx
+mov    %r12,%rsi
+call   get_rps_cpu
+test   %eax,%eax
+js     <netif_rx_internal+0xEE>
+mov    -0x20(%rbp),%rcx
+mov    %eax,%esi
+mov    %r12,%rdi
+lea    0x4(%rcx),%rdx
+call   enqueue_to_backlog
+mov    %eax,-0x24(%rbp)
+call   rcu_read_unlock_strict
+mov    -0x24(%rbp),%eax
+jmp    <netif_rx_internal+0x43>
+mov    %gs:0x0(%rip),%esi        # <netif_rx_internal+0xF5>
+mov    %esi,%eax
+jmp    <netif_rx_internal+0xCC>
+call   __stack_chk_fail

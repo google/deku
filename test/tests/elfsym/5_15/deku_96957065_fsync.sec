@@ -1,0 +1,10 @@
+.shstrtab
+.strtab
+.symtab
+.text.unlikely.ext4_sync_file
+.rela.text.unlikely.ext4_sync_file
+.rodata.ext4_sync_file.str1.1
+.rodata.ext4_sync_file.str1.8
+.rodata.__func__.0
+__bug_table
+.rela__bug_table

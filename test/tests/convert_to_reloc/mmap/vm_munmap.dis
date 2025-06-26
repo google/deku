@@ -1,0 +1,6 @@
+call   __fentry__
+push   %rbp
+xor    %edx,%edx
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __vm_munmap

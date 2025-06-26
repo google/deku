@@ -1,0 +1,51 @@
+call   __fentry__
+mov    (%rdi),%rax
+cmp    %rax,%rdi
+je     <netif_receive_skb_list+0xAD>
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+mov    %rdi,%r12
+push   %rbx
+jmp    <netif_receive_skb_list+0x36>
+mov    %r12,%rdi
+call   netif_receive_skb_list_internal
+jmp    <netif_receive_skb_list+0x7A>
+pop    %rbx
+pop    %r12
+pop    %rbp
+jmp    __x86_return_thunk
+mov    (%rdi),%rbx
+cmp    %rbx,%rdi
+je     <netif_receive_skb_list+0x20>
+jmp    <netif_receive_skb_list+0x4D>
+mov    (%rbx),%rbx
+cmp    %r12,%rbx
+jne    <netif_receive_skb_list+0x3E>
+jmp    <netif_receive_skb_list+0x20>
+mov    %gs:0x0(%rip),%eax        # <netif_receive_skb_list+0x54>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_receive_skb_list+0x5E>
+jae    <netif_receive_skb_list+0x43>
+mov    0x0(%rip),%rax        # <netif_receive_skb_list+0x67>
+test   %rax,%rax
+je     <netif_receive_skb_list+0x78>
+mov    0x8(%rax),%rdi
+mov    %rbx,%rsi
+call   __SCT__tp_func_netif_receive_skb_list_entry
+jmp    <netif_receive_skb_list+0x43>
+mov    %gs:0x0(%rip),%eax        # <netif_receive_skb_list+0x81>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_receive_skb_list+0x8B>
+jae    <netif_receive_skb_list+0x2D>
+mov    0x0(%rip),%rax        # <netif_receive_skb_list+0x94>
+test   %rax,%rax
+je     <netif_receive_skb_list+0xA4>
+mov    0x8(%rax),%rdi
+xor    %esi,%esi
+call   __SCT__tp_func_netif_receive_skb_list_exit
+pop    %rbx
+pop    %r12
+pop    %rbp
+jmp    __x86_return_thunk
+jmp    __x86_return_thunk

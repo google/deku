@@ -1,0 +1,6 @@
+call   __fentry__
+push   %rbp
+mov    $0x0,%r9
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __install_special_mapping

@@ -1,0 +1,114 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r15
+push   %r14
+push   %r13
+mov    %rdi,%r13
+push   %r12
+push   %rbx
+sub    $0x8,%rsp
+mov    0x10(%rdi),%r14
+mov    %esi,-0x2c(%rbp)
+mov    0x40(%r14),%rax
+test   $0x1,%al
+je     <__dev_direct_xmit+0x1DA>
+mov    0x40(%r14),%rax
+shr    $0x2,%rax
+and    $0x1,%eax
+jne    <__dev_direct_xmit+0x1DA>
+test   %rdi,%rdi
+je     <__dev_direct_xmit+0xB2>
+mov    %rdi,%r15
+xor    %r12d,%r12d
+jmp    <__dev_direct_xmit+0x56>
+mov    %rax,(%rbx)
+mov    0x8(%rax),%rbx
+test   %r15,%r15
+je     <__dev_direct_xmit+0x7E>
+mov    %r15,%rdi
+mov    (%r15),%r15
+mov    %r14,%rsi
+movq   $0x0,(%rdi)
+mov    %rdi,0x8(%rdi)
+call   validate_xmit_skb.constprop.0
+test   %rax,%rax
+je     <__dev_direct_xmit+0x51>
+test   %r12,%r12
+jne    <__dev_direct_xmit+0x4A>
+mov    %rax,%r12
+jmp    <__dev_direct_xmit+0x4D>
+mov    %r12,%rax
+cmp    %r12,%r13
+je     <__dev_direct_xmit+0xB5>
+lock incq 0x1c8(%r14)
+mov    %r12,%rdi
+mov    $0x1,%r13d
+call   kfree_skb_list
+add    $0x8,%rsp
+mov    %r13d,%eax
+pop    %rbx
+pop    %r12
+pop    %r13
+pop    %r14
+pop    %r15
+pop    %rbp
+jmp    __x86_return_thunk
+xor    %r12d,%r12d
+mov    -0x2c(%rbp),%edx
+mov    0x0(%rip),%rsi        # <__dev_direct_xmit+0xBF>
+mov    %gs:0x0(%rip),%rcx        # <__dev_direct_xmit+0xC7>
+mov    %dx,0x7c(%r12)
+movzwl %dx,%edx
+xor    %rcx,%rax
+lea    (%rdx,%rdx,4),%rbx
+add    %r14,%rax
+shl    $0x6,%rbx
+add    0x380(%r14),%rbx
+rol    $0x20,%rax
+lea    (%rbx,%rsi,1),%rcx
+rol    $0x10,%rsi
+xor    %rsi,%rcx
+add    %rcx,%rax
+rol    $0x15,%rcx
+xor    %rcx,%rax
+addl   $0x200,%gs:0x0(%rip)        # <__dev_direct_xmit+0x109>
+mov    %rax,%gs:0x0(%rip)        # <__dev_direct_xmit+0x111>
+incw   %gs:0x0(%rip)        # <__dev_direct_xmit+0x119>
+testb  $0x10,0xc9(%r14)
+je     <__dev_direct_xmit+0x150>
+mov    $0x10,%r13d
+testb  $0x5,0x90(%rbx)
+je     <__dev_direct_xmit+0x17A>
+mov    $0x200,%esi
+mov    $0x0,%rdi
+decw   %gs:0x0(%rip)        # <__dev_direct_xmit+0x146>
+call   __local_bh_enable_ip
+jmp    <__dev_direct_xmit+0x9C>
+lea    0x80(%rbx),%rdi
+mov    %gs:0x0(%rip),%r13d        # <__dev_direct_xmit+0x15F>
+call   _raw_spin_lock
+mov    %r13d,0x84(%rbx)
+mov    $0x10,%r13d
+testb  $0x5,0x90(%rbx)
+jne    <__dev_direct_xmit+0x1B6>
+mov    0x1e0(%r14),%rax
+mov    %r14,%rsi
+mov    %r12,%rdi
+movb   $0x0,%gs:0x0(%rip)        # <__dev_direct_xmit+0x18F>
+mov    0x20(%rax),%rax
+call   __x86_indirect_thunk_rax
+mov    %eax,%r13d
+test   %eax,%eax
+jne    <__dev_direct_xmit+0x1B6>
+cmpl   $0xffffffff,0x84(%rbx)
+je     <__dev_direct_xmit+0x1B6>
+mov    0x0(%rip),%rax        # <__dev_direct_xmit+0x1AF>
+mov    %rax,0x88(%rbx)
+testb  $0x10,0xc9(%r14)
+jne    <__dev_direct_xmit+0x132>
+movl   $0xffffffff,0x84(%rbx)
+movb   $0x0,0x80(%rbx)
+jmp    <__dev_direct_xmit+0x132>
+mov    %r13,%r12
+jmp    <__dev_direct_xmit+0x86>

@@ -1,0 +1,5 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __dev_queue_xmit

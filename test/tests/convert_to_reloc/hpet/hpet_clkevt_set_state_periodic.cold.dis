@@ -1,0 +1,4 @@
+mov    $0x143,%esi
+mov    $0x0,%rdi
+call   _hpet_print_config
+jmp    <hpet_clkevt_set_state_periodic+0xB4>

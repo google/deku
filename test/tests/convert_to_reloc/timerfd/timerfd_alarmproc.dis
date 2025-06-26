@@ -1,0 +1,7 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+call   timerfd_triggered
+xor    %eax,%eax
+pop    %rbp
+jmp    __x86_return_thunk

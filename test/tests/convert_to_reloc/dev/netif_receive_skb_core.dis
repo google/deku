@@ -1,0 +1,12 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+xor    %esi,%esi
+call   __netif_receive_skb_one_core
+mov    %eax,%r12d
+call   rcu_read_unlock_strict
+mov    %r12d,%eax
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk

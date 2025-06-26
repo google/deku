@@ -1,0 +1,18 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+sub    $0x18,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x8(%rbp)
+xor    %eax,%eax
+lea    -0x18(%rbp),%rsi
+mov    %rdi,-0x18(%rbp)
+mov    $0xc,%edi
+movq   $0x0,-0x10(%rbp)
+call   call_netdevice_notifiers_info
+mov    -0x8(%rbp),%rax
+sub    %gs:0x28,%rax
+jne    <netdev_features_change+0x4B>
+leave
+jmp    __x86_return_thunk
+call   __stack_chk_fail

@@ -1,0 +1,2 @@
+tmpfs		/tmp		tmpfs	mode=1777	0	0
+tmpfs		/root/deku		tmpfs	mode=1777	0	0

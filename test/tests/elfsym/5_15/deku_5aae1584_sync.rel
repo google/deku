@@ -1,0 +1,11 @@
+R_X86_64_PLT32    __fentry__
+R_X86_64_32S      .rodata.sync_filesystem.str1.1
+R_X86_64_PLT32    _printk
+R_X86_64_PLT32    writeback_inodes_sb
+R_X86_64_PLT32    __x86_indirect_thunk_rax
+R_X86_64_PLT32    __sync_blockdev
+R_X86_64_PLT32    sync_inodes_sb
+R_X86_64_PLT32    __x86_indirect_thunk_rax
+R_X86_64_PLT32    __sync_blockdev
+R_X86_64_PC32     sync_filesystem
+R_X86_64_PC32     .LC2

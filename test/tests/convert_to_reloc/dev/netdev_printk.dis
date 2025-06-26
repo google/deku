@@ -1,0 +1,26 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+sub    $0x60,%rsp
+mov    %rcx,0x48(%rsp)
+mov    %r8,0x50(%rsp)
+mov    %r9,0x58(%rsp)
+mov    %gs:0x28,%rax
+mov    %rax,0x28(%rsp)
+xor    %eax,%eax
+lea    0x10(%rbp),%rax
+mov    %rdx,(%rsp)
+mov    %rsp,%rdx
+mov    %rax,0x18(%rsp)
+lea    0x30(%rsp),%rax
+mov    %rax,0x20(%rsp)
+lea    0x10(%rsp),%rax
+mov    %rax,0x8(%rsp)
+movl   $0x18,0x10(%rsp)
+call   __netdev_printk
+mov    0x28(%rsp),%rax
+sub    %gs:0x28,%rax
+je     <netdev_printk+0x72>
+call   __stack_chk_fail
+leave
+jmp    __x86_return_thunk

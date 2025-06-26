@@ -1,0 +1,13 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+mov    %rdi,%rax
+nop
+mov    0x1c0(%rdi),%rdi
+lea    0x190(%rax),%rcx
+cmp    %rcx,0xf8(%rdi)
+je     <i915_vm_lock_objects+0x2E>
+mov    0x288(%rax),%rax
+mov    (%rax),%rdi
+pop    %rbp
+jmp    i915_gem_object_lock

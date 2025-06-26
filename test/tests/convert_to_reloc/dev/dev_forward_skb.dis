@@ -1,0 +1,15 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+mov    %rsi,%r12
+call   __dev_forward_skb
+test   %eax,%eax
+je     <dev_forward_skb+0x21>
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk
+mov    %r12,%rdi
+mov    -0x8(%rbp),%r12
+leave
+jmp    netif_rx_internal

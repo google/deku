@@ -1,0 +1,14 @@
+call   __fentry__
+push   %rbp
+cmpb   $0x0,0x0(%rip)        # <hpet_rtc_timer_init+0xD>
+mov    %rsp,%rbp
+je     <hpet_rtc_timer_init+0x1A>
+xor    %eax,%eax
+pop    %rbp
+jmp    __x86_return_thunk
+cmpq   $0x0,0x0(%rip)        # <hpet_rtc_timer_init+0x22>
+je     <hpet_rtc_timer_init+0x12>
+cmpb   $0x0,0x0(%rip)        # <hpet_rtc_timer_init+0x2B>
+je     <hpet_rtc_timer_init+0x12>
+pop    %rbp
+jmp    hpet_rtc_timer_init.part.0

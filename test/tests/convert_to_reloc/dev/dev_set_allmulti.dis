@@ -1,0 +1,6 @@
+call   __fentry__
+push   %rbp
+mov    $0x1,%edx
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __dev_set_allmulti

@@ -1,0 +1,42 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %rbx
+sub    $0x8,%rsp
+mov    0x10(%rdi),%r8
+mov    (%r8),%rbx
+mov    0x4b0(%rbx),%rax
+mov    0x3b4(%rax),%edx
+mov    0x18(%rdi),%rax
+mov    0x58(%rax),%rax
+test   %edx,%edx
+jne    <ip_mtu_from_fib_result+0x73>
+testb  $0x4,(%rax)
+jne    <ip_mtu_from_fib_result+0x73>
+mov    %r8,%rdi
+call   find_exception
+test   %rax,%rax
+je     <ip_mtu_from_fib_result+0x4D>
+mov    0x0(%rip),%rdx        # <ip_mtu_from_fib_result+0x47>
+cmp    0x20(%rax),%rdx
+js     <ip_mtu_from_fib_result+0x84>
+mov    0x210(%rbx),%eax
+mov    %eax,-0xc(%rbp)
+mov    -0xc(%rbp),%edx
+mov    $0xffff,%eax
+cmp    $0xfffe,%edx
+ja     <ip_mtu_from_fib_result+0x69>
+mov    -0xc(%rbp),%eax
+mov    -0x8(%rbp),%rbx
+leave
+jmp    __x86_return_thunk
+mov    0x4(%rax),%eax
+test   %eax,%eax
+je     <ip_mtu_from_fib_result+0x33>
+mov    -0x8(%rbp),%rbx
+leave
+jmp    __x86_return_thunk
+mov    0x10(%rax),%eax
+test   %eax,%eax
+je     <ip_mtu_from_fib_result+0x4D>
+jmp    <ip_mtu_from_fib_result+0x69>

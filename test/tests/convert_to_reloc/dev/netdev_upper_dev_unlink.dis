@@ -1,0 +1,17 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+sub    $0x18,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x8(%rbp)
+xor    %eax,%eax
+lea    -0x18(%rbp),%rdx
+movb   $0x2,-0x18(%rbp)
+movq   $0x0,-0x10(%rbp)
+call   __netdev_upper_dev_unlink
+mov    -0x8(%rbp),%rax
+sub    %gs:0x28,%rax
+jne    <netdev_upper_dev_unlink+0x46>
+leave
+jmp    __x86_return_thunk
+call   __stack_chk_fail

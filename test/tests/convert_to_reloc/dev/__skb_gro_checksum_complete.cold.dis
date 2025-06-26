@@ -1,0 +1,4 @@
+mov    %r12,%rsi
+mov    %r14,%rdi
+call   netdev_rx_csum_fault.part.0
+jmp    <__skb_gro_checksum_complete+0x58>

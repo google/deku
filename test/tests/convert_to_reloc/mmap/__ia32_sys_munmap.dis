@@ -1,0 +1,18 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r13
+push   %r12
+mov    0x28(%rdi),%r12d
+mov    0x58(%rdi),%r13d
+mov    %r12,%rdi
+call   profile_munmap
+mov    %r13,%rsi
+mov    %r12,%rdi
+mov    $0x1,%edx
+call   __vm_munmap
+pop    %r12
+pop    %r13
+cltq
+pop    %rbp
+jmp    __x86_return_thunk

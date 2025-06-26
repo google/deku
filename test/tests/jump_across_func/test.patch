@@ -1,0 +1,20 @@
+diff --git a/mm/mmap.c b/mm/mmap.c
+index 33ebda8385b9..f1320ca07945 100644
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -1406,6 +1406,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
+ 			unsigned long flags, unsigned long pgoff,
+ 			unsigned long *populate, struct list_head *uf)
+ {
++	pr_info("%lx", current);
+ 	struct mm_struct *mm = current->mm;
+ 	vm_flags_t vm_flags;
+ 	int pkey = 0;
+@@ -1731,6 +1732,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
+ 		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff,
+ 		struct list_head *uf)
+ {
++	printk(KERN_INFO "DEKU mmap_region test\n");
+ 	struct mm_struct *mm = current->mm;
+ 	struct vm_area_struct *vma, *prev, *merge;
+ 	int error;

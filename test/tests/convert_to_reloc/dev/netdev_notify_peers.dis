@@ -1,0 +1,27 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %rbx
+mov    %rdi,%rbx
+sub    $0x18,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x10(%rbp)
+xor    %eax,%eax
+call   rtnl_lock
+lea    -0x20(%rbp),%rsi
+mov    $0x13,%edi
+mov    %rbx,-0x20(%rbp)
+movq   $0x0,-0x18(%rbp)
+call   call_netdevice_notifiers_info
+lea    -0x20(%rbp),%rsi
+mov    $0x16,%edi
+mov    %rbx,-0x20(%rbp)
+movq   $0x0,-0x18(%rbp)
+call   call_netdevice_notifiers_info
+mov    -0x10(%rbp),%rax
+sub    %gs:0x28,%rax
+jne    <netdev_notify_peers+0x72>
+mov    -0x8(%rbp),%rbx
+leave
+jmp    rtnl_unlock
+call   __stack_chk_fail

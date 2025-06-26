@@ -1,0 +1,9 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+call   netdev_name_node_lookup_rcu
+test   %rax,%rax
+je     <dev_get_by_name_rcu+0x17>
+mov    0x20(%rax),%rax
+pop    %rbp
+jmp    __x86_return_thunk

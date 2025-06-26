@@ -1,0 +1,11 @@
+call   __fentry__
+push   %rbp
+mov    0x28(%rdi),%r9d
+mov    0x68(%rdi),%ecx
+mov    0x60(%rdi),%edx
+mov    0x58(%rdi),%esi
+mov    0x70(%rdi),%r8d
+mov    %r9,%rdi
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __do_sys_remap_file_pages

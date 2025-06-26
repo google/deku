@@ -1,0 +1,16 @@
+# interfaces(5) file used by ifup(8) and ifdown(8)
+# Include files from /etc/network/interfaces.d:
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+auto enp0s3
+iface enp0s3 inet dhcp
+  wait-delay 15
+  hostname $(hostname)
+
+auto enp0s1
+iface enp0s1 inet dhcp
+  wait-delay 15
+  hostname $(hostname)

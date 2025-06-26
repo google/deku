@@ -1,0 +1,10 @@
+call   __fentry__
+push   %rbp
+mov    $0x0,%r9
+mov    %rsp,%rbp
+call   __install_special_mapping
+mov    $0x0,%edx
+pop    %rbp
+cmp    $0xfffffffffffff001,%rax
+cmovb  %edx,%eax
+jmp    __x86_return_thunk

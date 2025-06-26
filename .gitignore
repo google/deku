@@ -1,3 +1,4 @@
+test-*
 .vscode/
 workdir_*
 mklivepatch

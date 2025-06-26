@@ -1,0 +1,7 @@
+call   __fentry__
+push   %rbp
+mov    0x68(%rdi),%rsi
+mov    0x70(%rdi),%rdi
+mov    %rsp,%rbp
+pop    %rbp
+jmp    __do_sys_timerfd_create

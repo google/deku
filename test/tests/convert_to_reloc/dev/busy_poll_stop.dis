@@ -1,0 +1,66 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r13
+push   %r12
+mov    %rsi,%r12
+push   %rbx
+mov    %rdi,%rbx
+lock andb $0xfd,0x10(%rdi)
+lock andb $0xbf,0x10(%rdi)
+addl   $0x200,%gs:0x0(%rip)        # <busy_poll_stop+0x29>
+mov    $0x8,%esi
+mov    0x28(%rdi),%rax
+call   __x86_indirect_thunk_rax
+mov    %eax,%r13d
+jmp    <busy_poll_stop+0x6A>
+test   %r12,%r12
+je     <busy_poll_stop+0x4D>
+movl   $0xffffffff,0x30(%r12)
+cmp    $0x8,%r13d
+je     <busy_poll_stop+0x9F>
+pop    %rbx
+mov    $0x200,%esi
+pop    %r12
+mov    $0x0,%rdi
+pop    %r13
+pop    %rbp
+jmp    __local_bh_enable_ip
+mov    %gs:0x0(%rip),%eax        # <busy_poll_stop+0x71>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <busy_poll_stop+0x7B>
+jae    <busy_poll_stop+0x3F>
+mov    0x0(%rip),%rax        # <busy_poll_stop+0x84>
+test   %rax,%rax
+je     <busy_poll_stop+0x9D>
+mov    0x8(%rax),%rdi
+mov    $0x8,%ecx
+mov    %r13d,%edx
+mov    %rbx,%rsi
+call   __SCT__tp_func_napi_poll
+jmp    <busy_poll_stop+0x3F>
+mov    0x118(%rbx),%eax
+test   %eax,%eax
+jne    <busy_poll_stop+0xE0>
+pushf
+pop    %r12
+cli
+mov    $0x0,%rax
+add    %gs:0x0(%rip),%rax        # <busy_poll_stop+0xBC>
+mov    0x8(%rax),%rdx
+mov    %rbx,0x8(%rax)
+mov    $0x3,%edi
+mov    %rax,(%rbx)
+mov    %rdx,0x8(%rbx)
+mov    %rbx,(%rdx)
+call   __raise_softirq_irqoff
+push   %r12
+popf
+jmp    <busy_poll_stop+0x53>
+lea    0x108(%rbx),%r12
+mov    %r12,%rdi
+call   netif_receive_skb_list_internal
+mov    %r12,0x108(%rbx)
+mov    %r12,0x110(%rbx)
+movl   $0x0,0x118(%rbx)
+jmp    <busy_poll_stop+0xA9>

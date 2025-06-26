@@ -1,0 +1,12 @@
+call   __fentry__
+push   %rbp
+movzbl 0x80(%rdi),%eax
+and    $0x60,%eax
+mov    %rsp,%rbp
+cmp    $0x60,%al
+jne    <skb_crc32c_csum_help+0x1D>
+pop    %rbp
+jmp    skb_crc32c_csum_help.part.0
+xor    %eax,%eax
+pop    %rbp
+jmp    __x86_return_thunk

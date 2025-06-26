@@ -1,0 +1,72 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+mov    %rdi,%r12
+sub    $0x18,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x10(%rbp)
+xor    %eax,%eax
+jmp    <netif_receive_skb+0x65>
+jmp    <netif_receive_skb+0xBF>
+jmp    <netif_receive_skb+0xEA>
+mov    %r12,%rdi
+call   __netif_receive_skb
+mov    %eax,%r12d
+call   rcu_read_unlock_strict
+jmp    <netif_receive_skb+0x92>
+mov    -0x10(%rbp),%rax
+sub    %gs:0x28,%rax
+jne    <netif_receive_skb+0x12A>
+mov    %r12d,%eax
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk
+mov    %gs:0x0(%rip),%eax        # <netif_receive_skb+0x6C>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_receive_skb+0x76>
+jae    <netif_receive_skb+0x26>
+mov    0x0(%rip),%rax        # <netif_receive_skb+0x7F>
+test   %rax,%rax
+je     <netif_receive_skb+0x90>
+mov    0x8(%rax),%rdi
+mov    %r12,%rsi
+call   __SCT__tp_func_netif_receive_skb_entry
+jmp    <netif_receive_skb+0x26>
+mov    %gs:0x0(%rip),%eax        # <netif_receive_skb+0x99>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_receive_skb+0xA3>
+jae    <netif_receive_skb+0x45>
+mov    0x0(%rip),%rax        # <netif_receive_skb+0xAC>
+test   %rax,%rax
+je     <netif_receive_skb+0xBD>
+mov    0x8(%rax),%rdi
+mov    %r12d,%esi
+call   __SCT__tp_func_netif_receive_skb_exit
+jmp    <netif_receive_skb+0x45>
+mov    0x0(%rip),%eax        # <netif_receive_skb+0xC5>
+test   %eax,%eax
+je     <netif_receive_skb+0x2B>
+cmpq   $0x0,0x20(%r12)
+jne    <netif_receive_skb+0x2B>
+xor    %edi,%edi
+call   ktime_get_with_offset
+mov    %rax,0x20(%r12)
+jmp    <netif_receive_skb+0x2B>
+mov    0x10(%r12),%rdi
+lea    -0x18(%rbp),%rax
+lea    -0x20(%rbp),%rdx
+mov    %r12,%rsi
+mov    %rax,-0x20(%rbp)
+call   get_rps_cpu
+test   %eax,%eax
+js     <netif_receive_skb+0x30>
+mov    -0x20(%rbp),%rcx
+mov    %r12,%rdi
+mov    %eax,%esi
+lea    0x4(%rcx),%rdx
+call   enqueue_to_backlog
+mov    %eax,%r12d
+call   rcu_read_unlock_strict
+jmp    <netif_receive_skb+0x40>
+call   __stack_chk_fail

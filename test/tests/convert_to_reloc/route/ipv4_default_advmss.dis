@@ -1,0 +1,13 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+call   ipv4_mtu
+mov    0x0(%rip),%edx        # <ipv4_default_advmss+0x14>
+pop    %rbp
+sub    $0x28,%eax
+cmp    %edx,%eax
+cmovb  %edx,%eax
+mov    $0xffd7,%edx
+cmp    $0xffd7,%eax
+cmova  %edx,%eax
+jmp    __x86_return_thunk

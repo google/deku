@@ -1,0 +1,6 @@
+.shstrtab
+.strtab
+.symtab
+.text.unlikely.rtc_handler
+.rela.text.unlikely.rtc_handler
+.rodata.rtc_handler.str1.1

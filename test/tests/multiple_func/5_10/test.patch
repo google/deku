@@ -1,0 +1,78 @@
+diff --git a/net/ipv6/netfilter/nf_tproxy_ipv6.c b/net/ipv6/netfilter/nf_tproxy_ipv6.c
+index 3fe4f15e01dc8..b7cac1c781925 100644
+--- a/net/ipv6/netfilter/nf_tproxy_ipv6.c
++++ b/net/ipv6/netfilter/nf_tproxy_ipv6.c
+@@ -80,7 +80,7 @@ nf_tproxy_get_sock_v6(struct net *net, struct sk_buff *skb, int thoff,
+ 		      const struct net_device *in,
+ 		      const enum nf_tproxy_lookup_t lookup_type)
+ {
+-	struct sock *sk;
++	struct sock *sk = NULL;
+ 
+ 	switch (protocol) {
+ 	case IPPROTO_TCP: {
+@@ -90,51 +90,11 @@ nf_tproxy_get_sock_v6(struct net *net, struct sk_buff *skb, int thoff,
+ 					sizeof(struct tcphdr), &_hdr);
+ 		if (hp == NULL)
+ 			return NULL;
+-
+-		switch (lookup_type) {
+-		case NF_TPROXY_LOOKUP_LISTENER:
+-			sk = inet6_lookup_listener(net, &tcp_hashinfo, skb,
+-						   thoff + __tcp_hdrlen(hp),
+-						   saddr, sport,
+-						   daddr, ntohs(dport),
+-						   in->ifindex, 0);
+-
+-			if (sk && !refcount_inc_not_zero(&sk->sk_refcnt))
+-				sk = NULL;
+-			/* NOTE: we return listeners even if bound to
+-			 * 0.0.0.0, those are filtered out in
+-			 * xt_socket, since xt_TPROXY needs 0 bound
+-			 * listeners too
+-			 */
+-			break;
+-		case NF_TPROXY_LOOKUP_ESTABLISHED:
+-			sk = __inet6_lookup_established(net, &tcp_hashinfo,
+-							saddr, sport, daddr, ntohs(dport),
+-							in->ifindex, 0);
+-			break;
+-		default:
+-			BUG();
+-		}
+ 		break;
+ 		}
+ 	case IPPROTO_UDP:
+ 		sk = udp6_lib_lookup(net, saddr, sport, daddr, dport,
+ 				     in->ifindex);
+-		if (sk) {
+-			int connected = (sk->sk_state == TCP_ESTABLISHED);
+-			int wildcard = ipv6_addr_any(&sk->sk_v6_rcv_saddr);
+-
+-			/* NOTE: we return listeners even if bound to
+-			 * 0.0.0.0, those are filtered out in
+-			 * xt_socket, since xt_TPROXY needs 0 bound
+-			 * listeners too
+-			 */
+-			if ((lookup_type == NF_TPROXY_LOOKUP_ESTABLISHED && (!connected || wildcard)) ||
+-			    (lookup_type == NF_TPROXY_LOOKUP_LISTENER && connected)) {
+-				sock_put(sk);
+-				sk = NULL;
+-			}
+-		}
+ 		break;
+ 	default:
+ 		WARN_ON(1);
+diff --git a/net/sunrpc/svcsock.c b/net/sunrpc/svcsock.c
+index 6d5bb8bfed38b..5350c002bfa17 100644
+--- a/net/sunrpc/svcsock.c
++++ b/net/sunrpc/svcsock.c
+@@ -1380,7 +1380,7 @@ int svc_addsock(struct svc_serv *serv, const int fd, char *name_return,
+ 	struct sockaddr_storage addr;
+ 	struct sockaddr *sin = (struct sockaddr *)&addr;
+ 	int salen;
+-
++pr_info("");
+ 	if (!so)
+ 		return err;
+ 	err = -EAFNOSUPPORT;

@@ -1,0 +1,44 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r12
+mov    %rdi,%r12
+jmp    <netif_rx_ni+0x3D>
+mov    %r12,%rdi
+call   netif_rx_internal
+mov    %eax,%r12d
+mov    %gs:0x0(%rip),%ax        # <netif_rx_ni+0x26>
+test   %ax,%ax
+jne    <netif_rx_ni+0xA2>
+jmp    <netif_rx_ni+0x6A>
+mov    %r12d,%eax
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk
+mov    %gs:0x0(%rip),%eax        # <netif_rx_ni+0x44>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_rx_ni+0x4E>
+jae    <netif_rx_ni+0x13>
+mov    0x0(%rip),%rax        # <netif_rx_ni+0x57>
+test   %rax,%rax
+je     <netif_rx_ni+0x68>
+mov    0x8(%rax),%rdi
+mov    %r12,%rsi
+call   __SCT__tp_func_netif_rx_ni_entry
+jmp    <netif_rx_ni+0x13>
+mov    %gs:0x0(%rip),%eax        # <netif_rx_ni+0x71>
+mov    %eax,%eax
+bt     %rax,0x0(%rip)        # <netif_rx_ni+0x7B>
+jae    <netif_rx_ni+0x30>
+mov    0x0(%rip),%rax        # <netif_rx_ni+0x84>
+test   %rax,%rax
+je     <netif_rx_ni+0x95>
+mov    0x8(%rax),%rdi
+mov    %r12d,%esi
+call   __SCT__tp_func_netif_rx_ni_exit
+mov    %r12d,%eax
+mov    -0x8(%rbp),%r12
+leave
+jmp    __x86_return_thunk
+call   do_softirq
+jmp    <netif_rx_ni+0x2B>

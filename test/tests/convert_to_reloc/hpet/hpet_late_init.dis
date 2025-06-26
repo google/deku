@@ -1,0 +1,196 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+push   %r14
+push   %r13
+push   %r12
+push   %rbx
+sub    $0xa0,%rsp
+mov    %gs:0x28,%rax
+mov    %rax,-0x28(%rbp)
+xor    %eax,%eax
+cmpq   $0x0,0x0(%rip)        # <hpet_late_init+0x2E>
+jne    <hpet_late_init+0x53>
+mov    0x0(%rip),%rax        # <hpet_late_init+0x37>
+test   %rax,%rax
+jne    <hpet_late_init+0x47>
+mov    $0xffffffed,%r12d
+jmp    <hpet_late_init+0x358>
+mov    %rax,0x0(%rip)        # <hpet_late_init+0x4E>
+call   hpet_enable
+cmpq   $0x0,0x0(%rip)        # <hpet_late_init+0x5B>
+je     <hpet_late_init+0x3C>
+mov    0x0(%rip),%rsi        # <hpet_late_init+0x64>
+mov    0x0(%rip),%ecx        # <hpet_late_init+0x6A>
+xor    %edx,%edx
+cmp    %ecx,%edx
+je     <hpet_late_init+0x96>
+movslq %edx,%rax
+imul   $0x140,%rax,%rax
+add    %rsi,%rax
+cmpl   $0x0,0x110(%rax)
+jne    <hpet_late_init+0x92>
+movl   $0x3,0x110(%rax)
+jmp    <hpet_late_init+0x96>
+inc    %edx
+jmp    <hpet_late_init+0x6C>
+cmpb   $0x0,0x0(%rip)        # <hpet_late_init+0x9D>
+movl   $0x0,0x0(%rip)        # <hpet_late_init+0xA7>
+jne    <hpet_late_init+0x2CB>
+mov    0x0(%rip),%rax        # <hpet_late_init+0xB4>
+test   $0x4,%al
+jne    <hpet_late_init+0x2CB>
+cmpb   $0x0,0x0(%rip)        # <hpet_late_init+0xC3>
+je     <hpet_late_init+0xD6>
+mov    $0x2ca,%esi
+mov    $0x0,%rdi
+call   _hpet_print_config
+cmpq   $0x0,0x0(%rip)        # <hpet_late_init+0xDE>
+movzbl 0x0(%rip),%r14d        # <hpet_late_init+0xE6>
+je     <hpet_late_init+0x16D>
+mov    0x0(%rip),%rdi        # <hpet_late_init+0xF3>
+mov    $0x40,%edx
+mov    $0xdc0,%esi
+call   kmem_cache_alloc_trace
+mov    %rax,%r12
+test   %rax,%rax
+je     <hpet_late_init+0x16D>
+mov    %rax,%rdi
+mov    $0x0,%rsi
+mov    $0x10,%ecx
+mov    0x0(%rip),%rdx        # <hpet_late_init+0x120>
+rep movsl %ds:(%rsi),%es:(%rdi)
+mov    %r14,0x38(%rax)
+mov    %r14d,%esi
+mov    $0x2,%edi
+call   __irq_domain_alloc_fwnode
+mov    %rax,%r13
+test   %rax,%rax
+je     <hpet_late_init+0x165>
+xor    %esi,%esi
+lea    -0x78(%rbp),%rdi
+mov    %rax,-0x78(%rbp)
+movl   $0x1,-0x70(%rbp)
+mov    %r14d,-0x6c(%rbp)
+call   irq_find_matching_fwspec
+mov    %rax,%rdx
+test   %rax,%rax
+jne    <hpet_late_init+0x17D>
+mov    %r13,%rdi
+call   irq_domain_free_fwnode
+mov    %r12,%rdi
+call   kfree
+movq   $0x0,0x0(%rip)        # <hpet_late_init+0x178>
+jmp    <hpet_late_init+0x2CB>
+cmp    0x0(%rip),%rax        # <hpet_late_init+0x184>
+je     <hpet_late_init+0x191>
+movq   $0x0,0x0(%rip)        # <hpet_late_init+0x191>
+mov    %r12,%rsi
+mov    %r13,%rdi
+call   msi_create_irq_domain
+mov    %rax,%rbx
+test   %rax,%rax
+jne    <hpet_late_init+0x1B4>
+mov    %r13,%rdi
+call   irq_domain_free_fwnode
+mov    %r12,%rdi
+call   kfree
+mov    %rbx,0x0(%rip)        # <hpet_late_init+0x1BB>
+xor    %r12d,%r12d
+test   %rbx,%rbx
+je     <hpet_late_init+0x2CB>
+cmp    0x0(%rip),%r12d        # <hpet_late_init+0x1CE>
+jae    <hpet_late_init+0x2B3>
+mov    %r12d,%ebx
+imul   $0x140,%rbx,%rbx
+add    0x0(%rip),%rbx        # <hpet_late_init+0x1E5>
+cmpl   $0x0,0x110(%rbx)
+je     <hpet_late_init+0x1F3>
+inc    %r12d
+jmp    <hpet_late_init+0x1C7>
+testb  $0x80,0x115(%rbx)
+je     <hpet_late_init+0x1EE>
+mov    %r12d,%edx
+lea    0x118(%rbx),%rdi
+mov    $0x0,%rsi
+call   sprintf
+mov    0x0(%rip),%r14        # <hpet_late_init+0x219>
+xor    %esi,%esi
+lea    -0xc0(%rbp),%rdi
+movslq 0x100(%rbx),%r13
+call   init_irq_alloc_info
+mov    %r14,%rdi
+mov    %rbx,-0x98(%rbp)
+movl   $0x2,-0xc0(%rbp)
+call   msi_get_domain_info
+mov    $0x1,%edx
+xor    %r9d,%r9d
+or     $0xffffffff,%ecx
+mov    0x38(%rax),%rax
+push   $0x0
+lea    -0xc0(%rbp),%r8
+or     $0xffffffff,%esi
+mov    %r14,%rdi
+mov    %r13,-0xb0(%rbp)
+mov    %eax,-0xb8(%rbp)
+call   __irq_domain_alloc_irqs
+pop    %rdx
+test   %eax,%eax
+jle    <hpet_late_init+0x1EE>
+mov    %eax,0x108(%rbx)
+mov    0x0(%rip),%eax        # <hpet_late_init+0x28C>
+mov    0x0(%rip),%rdi        # <hpet_late_init+0x293>
+movl   $0x2,0x110(%rbx)
+lea    0x1(%rax),%edx
+mov    %edx,0x0(%rip)        # <hpet_late_init+0x2A6>
+call   __sw_hweight64
+cmp    %eax,%edx
+jne    <hpet_late_init+0x1EE>
+mov    0x0(%rip),%edx        # <hpet_late_init+0x2B9>
+mov    0x0(%rip),%esi        # <hpet_late_init+0x2BF>
+mov    $0x0,%rdi
+call   _printk
+call   hpet_reserve_platform_timers
+cmpb   $0x0,0x0(%rip)        # <hpet_late_init+0x2D7>
+je     <hpet_late_init+0x2EA>
+mov    $0x47a,%esi
+mov    $0x0,%rdi
+call   _hpet_print_config
+xor    %r12d,%r12d
+cmpl   $0x0,0x0(%rip)        # <hpet_late_init+0x2F4>
+je     <hpet_late_init+0x358>
+xor    %r9d,%r9d
+xor    %r8d,%r8d
+mov    $0x1,%edx
+mov    $0xe2,%edi
+mov    $0x0,%rcx
+mov    $0x0,%rsi
+call   __cpuhp_setup_state
+mov    %eax,%r12d
+test   %eax,%eax
+jne    <hpet_late_init+0x358>
+xor    %r9d,%r9d
+xor    %ecx,%ecx
+mov    $0x1,%edx
+mov    $0x7,%edi
+mov    $0x0,%r8
+mov    $0x0,%rsi
+call   __cpuhp_setup_state
+mov    %eax,%r12d
+test   %eax,%eax
+je     <hpet_late_init+0x358>
+mov    $0x1,%esi
+mov    $0xe2,%edi
+call   __cpuhp_remove_state
+mov    -0x28(%rbp),%rax
+sub    %gs:0x28,%rax
+je     <hpet_late_init+0x36C>
+call   __stack_chk_fail
+lea    -0x20(%rbp),%rsp
+mov    %r12d,%eax
+pop    %rbx
+pop    %r12
+pop    %r13
+pop    %r14
+pop    %rbp
+jmp    __x86_return_thunk

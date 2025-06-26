@@ -1,0 +1,6 @@
+call   __fentry__
+push   %rbp
+mov    %rsp,%rbp
+call   force_hpet_resume
+pop    %rbp
+jmp    hpet_restart_counter
