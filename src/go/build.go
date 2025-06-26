@@ -36,7 +36,7 @@ func findFilesUsingHeaders(dir string, headerFiles []string) []string {
 			obj := relPath[:len(relPath)-len(".cmd")]
 			srcFile := relPath[:len(relPath)-len(".o.cmd")] + ".c"
 
-			if valid, err := buildInKernel(srcFile); !valid || err != nil {
+			if !isFileUsedInBuild(srcFile) {
 				return nil
 			}
 
@@ -401,7 +401,7 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 		}
 	}
 
-	if config.crosBoard != "" && !config.ignoreCross {
+	if !config.isAndroid && config.board != "" && !config.ignoreCross {
 		cros.preBuild()
 		defer cros.postBuild()
 	}

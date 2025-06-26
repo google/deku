@@ -19,12 +19,12 @@ type Cros struct {
 }
 
 func CrosKernelName(baseDir string, config Config) (string, error) {
-	kernelsDir := filepath.Join(baseDir, "/build/", config.crosBoard, "/var/db/pkg/sys-kernel")
+	kernelsDir := filepath.Join(baseDir, "/build/", config.board, "/var/db/pkg/sys-kernel")
 	kernels, err := filepath.Glob(filepath.Join(
 		kernelsDir,
 		"chromeos-kernel-*"))
 	if err != nil || len(kernels) == 0 {
-		LOG_ERR(nil, "Can't find the kernel it must be build with: USE=\"livepatch\" emerge-%s chromeos-kernel-...", config.crosBoard)
+		LOG_ERR(nil, "Can't find the kernel it must be build with: USE=\"livepatch\" emerge-%s chromeos-kernel-...", config.board)
 		return "", errors.New("ERROR_INSUFFICIENT_BUILD_PARAMS")
 	}
 
@@ -64,8 +64,8 @@ func (cros *Cros) preBuild() {
 	}
 	cros.afdoFiles = []string{}
 
-	dstDir = fmt.Sprintf("%s/build/%s/tmp/portage/sys-kernel/%s-9999/work", baseDir, config.crosBoard, kernDir)
-	path := filepath.Join(baseDir, "/build/", config.crosBoard, "/var/db/pkg/sys-kernel/", kernDir+"-9999", kernDir+"-9999.ebuild")
+	dstDir = fmt.Sprintf("%s/build/%s/tmp/portage/sys-kernel/%s-9999/work", baseDir, config.board, kernDir)
+	path := filepath.Join(baseDir, "/build/", config.board, "/var/db/pkg/sys-kernel/", kernDir+"-9999", kernDir+"-9999.ebuild")
 	ebuild, err := os.ReadFile(path)
 	if err != nil {
 		LOG_ERR(err, "Failed to read file: %s", path)
@@ -108,7 +108,7 @@ func (cros *Cros) preBuild() {
 		return
 	}
 
-	afdoPath = fmt.Sprintf("%s/build/%s/tmp/portage/sys-kernel/%s-9999/distdir/%s.xz", baseDir, config.crosBoard, kernDir, afdoFile)
+	afdoPath = fmt.Sprintf("%s/build/%s/tmp/portage/sys-kernel/%s-9999/distdir/%s.xz", baseDir, config.board, kernDir, afdoFile)
 	if fileExists(afdoPath) {
 		cros.extractAfdo(afdoPath, dstDir, afdoFile)
 		return

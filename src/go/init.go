@@ -31,7 +31,7 @@ func (init *Init) getParam(long, short string) string {
 		value = val
 	}
 
-	var directories = []string{"builddir", "sourcesdir", "headersdir", "src_inst_dir", "workdir", "cros_sdk"}
+	var directories = []string{"android_kernel", "builddir", "sourcesdir", "headersdir", "src_inst_dir", "workdir", "cros_sdk"}
 	if slicesContains(directories, long) && len(value) > 0 {
 		if !filepath.IsAbs(value) {
 			if strings.HasPrefix(value, "~/") {
@@ -117,13 +117,14 @@ func (init *Init) getConfig() (Config, int) {
 	lastArgIndex := init.parseParameters()
 
 	var config Config
+	config.androidKernelDir = init.getParam("android_kernel", "")
 	config.buildDir = init.getParam("builddir", "b")
 	config.kernelSrcDir = init.getParam("sourcesdir", "s")
 	config.linuxHeadersDir = init.getParam("headersdir", "k")
 	config.deployType = init.getParam("deploytype", "d")
 	config.sshOptions = init.getParam("ssh_options", "")
 	config.kernSrcInstallDir = init.getParam("src_inst_dir", "")
-	config.crosBoard = init.getParam("board", "")
+	config.board = init.getParam("board", "")
 	config.workdir = init.getParam("workdir", "w")
 	config.crosPath = init.getParam("cros_sdk", "c")
 	config.deployParams = init.getParam("target", "")
@@ -138,6 +139,8 @@ func (init *Init) getConfig() (Config, int) {
 		config.deployType = "ssh"
 	}
 
+	config.dstPath = "./" + REMOTE_DIR + "/"
+
 	return config, lastArgIndex
 }
 
@@ -149,6 +152,18 @@ func (init *Init) filesExist(path string, files []string) bool {
 	}
 
 	return true
+}
+
+func getFirstDir(dir string) string {
+	dirs, err := os.ReadDir(dir)
+	if err == nil {
+		for _, d := range dirs {
+			if d.IsDir() {
+				return filepath.Join(dir, d.Name())
+			}
+		}
+	}
+	return ""
 }
 
 func (init *Init) isKernelSourcesDir(path string) bool {
@@ -171,12 +186,20 @@ func (init *Init) isLinuxHeadersDir(path string) bool {
 	return init.filesExist(path, []string{"Makefile", "Module.symvers", "include/generated/uapi/linux/version.h"})
 }
 
-func (init *Init) findKernelHeaders(path string) string {
-
+func (init *Init) findKernelHeaders(path string) (string, bool) {
 	// try to find from ".o.cmd" file
-	dir := findPathForFileFromCmdFile(path, "arch/x86/include/generated/uapi/asm/types.h")
+	isAndroid := false
+	dir := findFilePathFromCmdFiles(path, "arch/x86/include/generated/uapi/asm/types.h")
+	if dir == "" {
+		androidSrcDir := findFilePathFromCmdFiles(path, "include/linux/android_kabi.h")
+		if androidSrcDir != "" {
+			isAndroid = true
+			dir = filepath.Join(getFirstDir(androidSrcDir+"../out"), "common") + "/"
+		}
+	}
+
 	if fileExists(dir) {
-		return dir
+		return dir, isAndroid
 	}
 
 	// try to find in the Makefile
@@ -187,7 +210,7 @@ func (init *Init) findKernelHeaders(path string) string {
 			if match != nil {
 				path := strings.Trim(match[1], "\"'")
 				if fileExists(path) {
-					return path + "/"
+					return path + "/", isAndroid
 				}
 				if strings.Contains(path, "$(shell ") {
 					path = strings.ReplaceAll(path, "$(shell ", "$(")
@@ -195,7 +218,7 @@ func (init *Init) findKernelHeaders(path string) string {
 				out, _ := exec.Command("bash", "-c", "echo -n "+path).Output()
 				path = string(out)
 				if fileExists(path) {
-					return path + "/"
+					return path + "/", isAndroid
 				}
 				break
 			} else {
@@ -205,7 +228,7 @@ func (init *Init) findKernelHeaders(path string) string {
 		}
 	}
 
-	return ""
+	return "", false
 }
 
 func (init *Init) checkConfigEnabled(linuxHeadersDir, flag, symbolName string) bool {
@@ -264,7 +287,16 @@ func (init *Init) checkBuildDir(config *Config) error {
 		}
 
 		if config.linuxHeadersDir == "" {
-			config.linuxHeadersDir = init.findKernelHeaders(config.buildDir)
+			isAndroid := false
+			config.linuxHeadersDir, isAndroid = init.findKernelHeaders(config.buildDir)
+			if isAndroid && !config.isAndroid {
+				config.androidKernelDir = strings.Split(config.linuxHeadersDir, "out/bazel/output_user_root")[0]
+				err := init.checkConfigForAndroid(config)
+				if err != nil {
+					return err
+				}
+			}
+
 			if config.linuxHeadersDir == "" {
 				LOG_ERR(nil, "Failed to find kernel headers directory. Please specify it using -k or --headersdir parameter. This is the same parameter as the -C parameter for the `make` command in the Makefile.")
 				return mkError(ERROR_INVALID_HEADERS_DIR)
@@ -293,7 +325,7 @@ func (init *Init) checkConfigForCros(config *Config) error {
 	var overrideSshOptions = false
 	var baseDir = ""
 	if config.crosPath != "" {
-		baseDir = config.crosPath + "chroot/"
+		baseDir = config.crosPath + "out/"
 	}
 
 	insideCros := fileExists("/etc/cros_chroot_version")
@@ -303,8 +335,8 @@ func (init *Init) checkConfigForCros(config *Config) error {
 	}
 
 	if config.workdir == "" {
-		workdirName := "workdir_" + config.crosBoard + "/"
-		if config.crosBoard == "" {
+		workdirName := "workdir_" + config.board + "/"
+		if config.board == "" {
 			workdirName = tempWorkdirName + "/"
 		}
 
@@ -325,20 +357,20 @@ func (init *Init) checkConfigForCros(config *Config) error {
 	}
 	config.deployType = "ssh"
 
-	if config.crosBoard == "" {
+	if config.board == "" {
 		var board []byte
 		var err error
 		if config.deployParams != "" {
-			board, err = runSSHCommandWithConfig("cat /etc/lsb-release | grep CHROMEOS_RELEASE_BOARD | cut -d= -f2", *config)
+			board, err = SSHExecuteCommandWithConfig("cat /etc/lsb-release | grep CHROMEOS_RELEASE_BOARD | cut -d= -f2", *config)
 		}
-		config.crosBoard = strings.TrimSpace(string(board))
+		config.board = strings.TrimSpace(string(board))
 
-		if config.crosBoard == "" || err != nil {
+		if config.board == "" || err != nil {
 			LOG_ERR(nil, "Failure to connect to Chromebook and retrieve board name")
 			return mkError(ERROR_NO_BOARD_PARAM)
 		}
 		if overrideWorkdir {
-			config.workdir = cacheDir + "workdir_" + config.crosBoard + "/"
+			config.workdir = cacheDir + "workdir_" + config.board + "/"
 			if overrideSshOptions {
 				config.sshOptions = " -o IdentityFile=" + config.workdir + "/testing_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -q"
 			}
@@ -353,7 +385,7 @@ func (init *Init) checkConfigForCros(config *Config) error {
 		return errors.New("ERROR_INVALID_PARAMETERS")
 	}
 
-	if !fileExists(baseDir + "/build/" + config.crosBoard) {
+	if !fileExists(baseDir + "/build/" + config.board) {
 		LOG_ERR(nil, "Please setup the board using \"setup_board\" command")
 		return errors.New("ERROR_BOARD_NOT_EXISTS")
 	}
@@ -368,16 +400,25 @@ func (init *Init) checkConfigForCros(config *Config) error {
 			return err
 		}
 
-		if !config.isModule {
+		if config.isModule && config.kernelSrcDir == "" {
+			kernelBuildDir := filepath.Join(baseDir, "/build/", config.board, "/var/cache/portage/sys-kernel", kernDir)
+			config.kernelSrcDir, err = os.Readlink(kernelBuildDir + "/source")
+			if err != nil {
+				LOG_ERR(err, "Fail to read link to kernel source file from: %s", kernelBuildDir+"/source")
+				return mkError(ERROR_INVALID_KERN_SRC_DIR)
+			}
+
+			config.kernelSrcDir += "/"
+		} else {
 			LOG_ERR(nil, "-b|--builddir parameter can not be used for Chromebook kernel")
 			return mkError(ERROR_INVALID_PARAMETERS)
 		}
 	} else {
-		config.buildDir = filepath.Join(baseDir, "/build/", config.crosBoard, "/var/cache/portage/sys-kernel", kernDir) + "/"
+		config.buildDir = filepath.Join(baseDir, "/build/", config.board, "/var/cache/portage/sys-kernel", kernDir) + "/"
 	}
 
 	if config.kernSrcInstallDir == "" {
-		srcPath := filepath.Join(baseDir, "/build/", config.crosBoard, "/usr/src/"+kernDir+"-9999") + "/"
+		srcPath := filepath.Join(baseDir, "/build/", config.board, "/usr/src/"+kernDir+"-9999") + "/"
 		if fileExists(srcPath) {
 			config.kernSrcInstallDir = srcPath
 		}
@@ -397,10 +438,101 @@ func (init *Init) checkConfigForCros(config *Config) error {
 	return nil
 }
 
+func (init *Init) checkConfigForAndroid(config *Config) error {
+	if !fileExists(config.androidKernelDir) {
+		LOG_ERR(nil, "Given android kernel directory does not exist: %s", config.androidKernelDir)
+		return mkError(ERROR_INVALID_ANDROID_KERNEL_DIR)
+	}
+
+	if config.board == "" {
+		var board []byte
+		var err error
+		if config.deployParams != "" {
+			board, err = ADBExecuteCommandWithConfig("getprop ro.product.name", *config)
+		}
+		config.board = strings.TrimSpace(string(board))
+
+		if config.board == "" || err != nil {
+			LOG_ERR(nil, "Failure to connect to device and retrieve board name")
+			return mkError(ERROR_NO_BOARD_PARAM)
+		}
+	}
+
+	// execute the `bazel info output_base` command to get the Bazel output base directory.
+	cmd := exec.Command("tools/bazel", "info", "output_base")
+	cmd.Dir = config.androidKernelDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		LOG_ERR(err, "Failed to get Bazel output base directory")
+		return mkError(ERROR_INVALID_ANDROID_KERNEL_DIR)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	outBase := lines[len(lines)-1] // get the last line, which should contain the output base directory
+	LOG_DEBUG("Bazel output base: %s", outBase)
+	if outBase == "" {
+		LOG_ERR(nil, "Failed to get Bazel output base directory. Please check if you are in the correct directory.")
+		return mkError(ERROR_INVALID_ANDROID_KERNEL_DIR)
+	}
+
+	// get directories list in the linux-sandbox subdirectory of the Bazel output base
+	dirs, err := os.ReadDir(outBase + "/sandbox/linux-sandbox/")
+	if err != nil {
+		LOG_ERR(err, "Failed to read directories in the Bazel output base")
+		return mkError(ERROR_INVALID_BUILDDIR)
+	}
+
+	for _, dir := range dirs {
+		if dir.IsDir() && !strings.HasPrefix(dir.Name(), ".") {
+			execRootMain := outBase + "/sandbox/linux-sandbox/" + dir.Name() + "/execroot/_main/"
+			androidDir := getFirstDir(execRootMain + "out/")
+			if fileExists(androidDir+"/common/include/generated/utsversion.h") &&
+				fileExists(androidDir+"/common/vmlinux.o") {
+				utsVer, err := os.ReadFile(androidDir + "/common/include/generated/utsversion.h")
+				if err != nil {
+					LOG_ERR(err, "Failed to read utsversion.h file in the Android kernel directory: %s", androidDir)
+					continue
+				}
+				if !bytes.Contains(utsVer, []byte("Jan  1 00:00:00 UTC 1970")) &&
+					!bytes.Contains(utsVer, []byte("1970-01-01T00:00:00Z")) {
+					if config.buildDir == "" {
+						config.buildDir = androidDir + "/common/"
+					}
+					clangDir := getFirstDir(execRootMain + "/prebuilts/clang/host/linux-x86/")
+					config.llvm = clangDir + "/bin/"
+				}
+			} else if fileExists(androidDir+"/common/source") &&
+				fileExists(androidDir+"/common/modules.order") {
+				config.androidModulesDir = androidDir + "/common/"
+				LOG_DEBUG("Found Android kernel modules directory: %s", config.androidModulesDir)
+			}
+		}
+	}
+
+	if config.buildDir == "" {
+		LOG_ERR(nil, "Failed to find Android kernel build directory in the Bazel output base: %s", outBase)
+		return mkError(ERROR_INVALID_BUILDDIR)
+	} else if config.androidModulesDir == "" {
+		LOG_ERR(nil, "Failed to find Android kernel modules directory in the Bazel output base: %s", outBase)
+		return mkError(ERROR_INVALID_ANDROID_KERNEL_DIR)
+	}
+
+	config.deployType = "adb"
+	config.isAndroid = true
+	config.dstPath = "/tmp/" + REMOTE_DIR + "/"
+
+	return nil
+}
+
 func (init *Init) checkConfig(config *Config) error {
 	if !config.ignoreCross && fileExists("/etc/cros_chroot_version") ||
-		(config.crosBoard != "" && config.crosPath != "") {
+		(config.board != "" && config.crosPath != "") {
 		err := init.checkConfigForCros(config)
+		if err != nil {
+			return err
+		}
+	} else if config.androidKernelDir != "" {
+		err := init.checkConfigForAndroid(config)
 		if err != nil {
 			return err
 		}
@@ -445,7 +577,8 @@ func (init *Init) checkConfig(config *Config) error {
 	}
 
 	if config.linuxHeadersDir != "" {
-		if !init.isLinuxHeadersDir(config.linuxHeadersDir) {
+		isHeadersDir := init.isLinuxHeadersDir(config.linuxHeadersDir)
+		if !isHeadersDir {
 			LOG_ERR(nil, "Given headers directory is not a valid linux headers directory: %s", config.linuxHeadersDir)
 			return mkError(ERROR_INVALID_HEADERS_DIR)
 		}
@@ -454,8 +587,11 @@ func (init *Init) checkConfig(config *Config) error {
 	}
 
 	if !init.isKlpEnabled(config.linuxHeadersDir) {
-		if config.crosBoard != "" {
-			LOG_ERR(nil, `Your kernel must be build with: USE="livepatch kernel_sources" emerge-%s chromeos-kernel-...`, config.crosBoard)
+		if config.isAndroid {
+			LOG_ERR(nil, "Kernel livepatching is not enabled. Please use './replace_prebuilts.py --build-kernel --keep-build-dir --kleaf-common-args=\"--debug\" <ANDROID_KERNEL_PATH>' to build the kernel")
+			return mkError(ERROR_KLP_IS_NOT_ENABLED)
+		} else if config.board != "" {
+			LOG_ERR(nil, `Your kernel must be build with: USE="livepatch kernel_sources" emerge-%s chromeos-kernel-...`, config.board)
 			return mkError(ERROR_INSUFFICIENT_BUILD_PARAMS)
 		} else {
 			LOG_ERR(nil, "Kernel livepatching is not enabled. Please enable CONFIG_LIVEPATCH flag and rebuild the kernel")
@@ -468,8 +604,8 @@ func (init *Init) checkConfig(config *Config) error {
 		return err
 	}
 
-	if init.checkConfigEnabled(config.linuxHeadersDir, "CONFIG_CC_IS_CLANG", "") {
-		config.useLLVM = "LLVM=1"
+	if config.llvm == "" && init.checkConfigEnabled(config.linuxHeadersDir, "CONFIG_CC_IS_CLANG", "") {
+		config.llvm = "1"
 	}
 
 	config.isAARCH64 = init.checkConfigEnabled(config.linuxHeadersDir, "CONFIG_ARM64", "")
@@ -513,11 +649,17 @@ func (init *Init) init() (Config, int, error) {
 
 func debugPrintConfig(config *Config) {
 	LOG_DEBUG("-----------CONFIG-----------")
+	if config.androidKernelDir != "" {
+		LOG_DEBUG("androidKernelDir: %s", config.androidKernelDir)
+	}
+	if config.androidModulesDir != "" {
+		LOG_DEBUG("androidModulesDir: %s", config.androidModulesDir)
+	}
 	if config.buildDir != "" {
 		LOG_DEBUG("buildDir: %s", config.buildDir)
 	}
-	if config.crosBoard != "" {
-		LOG_DEBUG("crosBoard: %s", config.crosBoard)
+	if config.board != "" {
+		LOG_DEBUG("board: %s", config.board)
 	}
 	if config.crosPath != "" {
 		LOG_DEBUG("crosPath: %s", config.crosPath)
@@ -528,10 +670,21 @@ func debugPrintConfig(config *Config) {
 	if config.deployType != "" {
 		LOG_DEBUG("deployType: %s", config.deployType)
 	}
-	LOG_DEBUG("ignoreCross: %v", config.ignoreCross)
-	LOG_DEBUG("isAARCH64: %v", config.isAARCH64)
-	LOG_DEBUG("isCros: %v", config.isCros)
-	LOG_DEBUG("isModule: %v", config.isModule)
+	if config.ignoreCross {
+		LOG_DEBUG("ignoreCross: %v", config.ignoreCross)
+	}
+	if config.isAARCH64 {
+		LOG_DEBUG("isAARCH64: %v", config.isAARCH64)
+	}
+	if config.isAndroid {
+		LOG_DEBUG("isAndroid: %v", config.isAndroid)
+	}
+	if config.isCros {
+		LOG_DEBUG("isCros: %v", config.isCros)
+	}
+	if config.isModule {
+		LOG_DEBUG("isModule: %v", config.isModule)
+	}
 	if config.kernSrcInstallDir != "" {
 		LOG_DEBUG("kernSrcInstallDir: %s", config.kernSrcInstallDir)
 	}
@@ -550,8 +703,8 @@ func debugPrintConfig(config *Config) {
 	if config.sshOptions != "" {
 		LOG_DEBUG("sshOptions: %s", config.sshOptions)
 	}
-	if config.useLLVM != "" {
-		LOG_DEBUG("useLLVM: %s", config.useLLVM)
+	if config.llvm != "" {
+		LOG_DEBUG("llvm: %s", config.llvm)
 	}
 	if config.workdir != "" {
 		LOG_DEBUG("workdir: %s", config.workdir)

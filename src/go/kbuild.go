@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-func cmdFromMod(modFile string, skipParam []string) ([]string, string, error) {
+func cmdFromCmdFile(modFile string, skipParam []string) ([]string, string, error) {
 	var cmd []string
 	var extraCmd string
 	var line string
@@ -65,12 +65,12 @@ func cmdFromMod(modFile string, skipParam []string) ([]string, string, error) {
 	return cmd, extraCmd, nil
 }
 
-func findPathForFileFromCmdFile(path, file string) string {
+func findFilePathFromCmdFiles(path, file string) string {
 	cmdFiles, err := filepath.Glob(filepath.Join(
 		path,
 		"*.o.cmd"))
 	if err != nil || len(cmdFiles) == 0 {
-		LOG_ERR(nil, "Can't find any *.o.cmd in the build dir: %s", path)
+		LOG_ERR(err, "Can't find any *.o.cmd in the build dir: %s", path)
 		return ""
 	}
 
@@ -89,14 +89,26 @@ func findPathForFileFromCmdFile(path, file string) string {
 func cmdBuildFile(srcFile string) ([]string, string, error) {
 	file := filenameNoExt(srcFile)
 	dir := filepath.Dir(srcFile)
-	modFile := filepath.Join(config.buildDir, dir, fmt.Sprintf(".%s.o.cmd", file))
+	cmdFile := filepath.Join(config.buildDir, dir, fmt.Sprintf(".%s.o.cmd", file))
 
-	if _, err := os.Stat(modFile); err != nil {
-		return nil, "", err
+	if !fileExists(cmdFile) {
+		modulesFiles := readLines(filepath.Join(config.workdir, MODULES_FILES_LIST))
+		for _, line := range modulesFiles {
+			if strings.HasPrefix(line, srcFile) {
+				objFile := strings.Split(line, " ")[1]
+				file := filepath.Base(objFile)
+				dir := filepath.Dir(objFile)
+				cmdFile = filepath.Join(config.buildDir, dir, "."+file+".cmd")
+				if !fileExists(cmdFile) && config.isAndroid {
+					cmdFile = filepath.Join(config.androidModulesDir, dir, "."+file+".cmd")
+				}
+				break
+			}
+		}
 	}
 
 	skipParam := []string{"-o", "-Wdeclaration-after-statement"}
-	cmd, extraCmd, err := cmdFromMod(modFile, skipParam)
+	cmd, extraCmd, err := cmdFromCmdFile(cmdFile, skipParam)
 	if err != nil {
 		return nil, "", err
 	}
@@ -172,6 +184,14 @@ func buildFile(srcFile, compileFile, outFile string) error {
 		compileFile = filepath.Join(currentPath, compileFile)
 	}
 
+	if config.androidKernelDir != "" && !strings.HasPrefix(cmd[0], "/") {
+		cmd[0] = config.llvm + cmd[0]
+	}
+
+	if config.isModule && len(config.patches) > 0 {
+		cmd = append(cmd, "-I"+config.buildDir)
+	}
+
 	cmd = append(cmd, cmdPrefixMap(filepath.Dir(compileFile), filepath.Dir(srcFile))...)
 	cmd = append(cmd, cmdPrefixMap(config.kernelSrcDir, "")...)
 	cmd = append(cmd, cmdPrefixMap(config.kernelSrcDir+"./", "")...)
@@ -184,11 +204,23 @@ func buildFile(srcFile, compileFile, outFile string) error {
 	execCmd := exec.Command("bash", "-c", strings.Join(cmd, " ")) // FIXME:Do not use a bash
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
-	if config.isModule && findPathForFileFromCmdFile(config.buildDir, "arch/x86/include/generated/uapi/asm/types.h") != "" {
+	if config.isModule &&
+		(findFilePathFromCmdFiles(config.buildDir, "arch/x86/include/generated/uapi/asm/types.h") != "") {
 		execCmd.Dir = config.buildDir
 	} else {
 		execCmd.Dir = config.linuxHeadersDir
 	}
+
+	if config.isAndroid {
+		modulesFiles := readLines(filepath.Join(config.workdir, MODULES_FILES_LIST))
+		for _, line := range modulesFiles {
+			if strings.HasPrefix(line, srcFile) {
+				execCmd.Dir = config.androidModulesDir
+				break
+			}
+		}
+	}
+
 	err = execCmd.Run()
 
 	if err != nil {
@@ -213,7 +245,7 @@ func buildFile(srcFile, compileFile, outFile string) error {
 			execCmd := exec.Command(newExtraCmd[0], newExtraCmd[1:]...)
 			execCmd.Stdout = os.Stdout
 			execCmd.Stderr = os.Stderr
-			execCmd.Dir = config.buildDir
+			execCmd.Dir = config.linuxHeadersDir
 
 			if err := execCmd.Run(); err != nil {
 				LOG_INFO("Failed to perform additional action for %s (%s). %s", srcFile, execCmd.Args, err)
@@ -234,8 +266,8 @@ func buildModules(moduleDir string) error {
 		cmd.Args = append(cmd.Args, "CROSS_COMPILE="+TOOLCHAIN)
 	}
 
-	if config.useLLVM != "" {
-		cmd.Args = append(cmd.Args, config.useLLVM)
+	if config.llvm != "" {
+		cmd.Args = append(cmd.Args, "LLVM="+config.llvm)
 	}
 
 	out, err := cmd.CombinedOutput()

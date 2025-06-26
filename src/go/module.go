@@ -59,6 +59,9 @@ func generatePatchId(srcFile string) (string, error) {
 	if !fileExists(path) {
 		if config.isModule {
 			path = config.buildDir + srcFile
+			if !fileExists(path) {
+				path = config.kernelSrcDir + srcFile
+			}
 		} else {
 			path = config.kernelSrcDir + srcFile
 		}
@@ -130,17 +133,16 @@ func generateLivepatchMakefile(makefile string, module dekuModule) error {
 	return err
 }
 
-func generateDiffObject(patchName string, file string) ([]string, error) {
-	fileName := filenameNoExt(file)
+func generateDiffObject(patchName, srcFile, originObjFile string) ([]string, error) {
+	fileName := filenameNoExt(srcFile)
 	patchDir := filepath.Join(config.workdir, patchName)
 	oFile := patchDir + "/" + fileName + ".o"
-	originObjFile := config.buildDir + file[:len(file)-1] + "o"
 	var extractSyms []string
 	var modSyms []string
 
 	out, err := showDiff(originObjFile, oFile)
 	if err != nil {
-		LOG_ERR(errors.New(out), "Can't find modified functions for %s", file)
+		LOG_ERR(errors.New(out), "Can't find modified functions for %s", srcFile)
 		return nil, err
 	}
 
@@ -177,20 +179,16 @@ func generateDiffObject(patchName string, file string) ([]string, error) {
 
 		traceable, traceableCallers, nonTraceableCallers := checkIsTraceable(originObjFile, fun)
 		if !traceable && len(traceableCallers) == 0 {
-			LOG_ERR(nil, "Can't apply changes to '%s'. The '%s' function is not allowed to modify.", file, fun)
-			return nil, errors.New("ERROR_FORBIDDEN_MODIFY")
+			LOG_ERR(nil, "Can't apply changes to '%s'. The '%s' function is not allowed to modify.", srcFile, fun)
+			return nil, mkError(ERROR_FORBIDDEN_MODIFY)
 		}
 
 		if traceable {
 			modSyms = append(modSyms, fun)
 		} else {
-			for _, sym := range nonTraceableCallers {
-				extractSyms = append(extractSyms, sym)
-			}
-			for _, sym := range traceableCallers {
-				modSyms = append(modSyms, sym)
-				extractSyms = append(extractSyms, sym)
-			}
+			extractSyms = append(extractSyms, nonTraceableCallers...)
+			extractSyms = append(extractSyms, traceableCallers...)
+			modSyms = append(modSyms, traceableCallers...)
 		}
 		extractSyms = append(extractSyms, fun)
 	}
@@ -210,30 +208,31 @@ func generateDiffObject(patchName string, file string) ([]string, error) {
 	err = extractSymbols(oFile, patchDir+"/patch.o", removeDuplicate(extractSyms),
 		DEKU_PATCH_REF_SYM_PREFIX+patchName)
 	if err != nil {
-		LOG_ERR(mkError(ERROR_EXTRACT_SYMBOLS), "Failed to extract modified symbols for %s", file)
+		LOG_ERR(mkError(ERROR_EXTRACT_SYMBOLS), "Failed to extract modified symbols for %s", srcFile)
 		return nil, err
 	}
 
 	return removeDuplicate(modSyms), nil
 }
 
-func findObjectFile(srcFile string) (string, error) {
+func findObjectFile(srcFile string) []string {
+	objFiles := []string{}
 	vmlinuxFiles := readLines(filepath.Join(config.workdir, VMLINUX_FILES_LIST))
 	for _, file := range vmlinuxFiles {
 		if file == srcFile {
-			return "vmlinux", nil
+			objFiles = append(objFiles, "vmlinux")
 		}
 	}
 
 	modulesFiles := readLines(filepath.Join(config.workdir, MODULES_FILES_LIST))
 	for _, line := range modulesFiles {
 		if strings.HasPrefix(line, srcFile) {
-			baseFile := strings.Split(line, " ")[1]
-			return baseFile + ".ko", nil
+			baseFile := strings.Split(line, " ")[2]
+			objFiles = append(objFiles, baseFile+".ko")
 		}
 	}
 
-	return "", mkError(ERROR_CANT_FIND_OBJ)
+	return objFiles
 }
 
 func generateLivepatchSource(moduleDir string, patches []dekuPatch, cumulativeModule bool) error {
@@ -274,7 +273,7 @@ func generateLivepatchSource(moduleDir string, patches []dekuPatch, cumulativeMo
 				return err
 			}
 
-			symPos, err := findSymbolIndex(symbol, "f", patch.SrcFile, config.buildDir+patch.ObjPath)
+			symPos, err := findSymbolIndex(symbol, "f", patch.SrcFile, patch.ObjPath)
 			if err != nil {
 				return err
 			}
@@ -340,13 +339,8 @@ static struct klp_patch deku_patch = {
 	return nil
 }
 
-func buildInKernel(srcFile string) (bool, error) {
-	objPath, err := findObjectFile(srcFile)
-	if err != nil && errorStrToCode(err) == ERROR_CANT_FIND_OBJ {
-		err = nil
-	}
-
-	return objPath != "", err
+func isFileUsedInBuild(srcFile string) bool {
+	return len(findObjectFile(srcFile)) > 0
 }
 
 func cleanUpPatch(patch dekuPatch) {
@@ -398,13 +392,7 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 		return invalidatePatch(patch), err
 	}
 
-	builtin, err := buildInKernel(file)
-	if err != nil {
-		LOG_ERR(err, "Error during checking if file: %s is built-in into the kernel", file)
-		return invalidatePatch(patch), err
-	}
-
-	if !builtin {
+	if !isFileUsedInBuild(file) {
 		var logFunc func(string, ...any)
 		if explicitModified {
 			logFunc = LOG_WARN
@@ -454,7 +442,12 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 		return invalidatePatch(patch), err
 	}
 
-	originObjectFile := config.buildDir + filepath.Dir(file) + "/" + fileName + ".o"
+	kernelBuildDir := config.buildDir
+	originObjectFile := kernelBuildDir + filepath.Dir(file) + "/" + fileName + ".o"
+	if !fileExists(originObjectFile) && config.isAndroid {
+		kernelBuildDir = config.androidModulesDir
+		originObjectFile = kernelBuildDir + filepath.Dir(file) + "/" + fileName + ".o"
+	}
 
 	if LOG_LEVEL <= 1 {
 		copyFile(originObjectFile, patchDir+"/_"+fileName+".o")
@@ -473,7 +466,7 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 		return invalidatePatch(patch), err
 	}
 
-	patch.ModFuncs, err = generateDiffObject(patch.Name, file)
+	patch.ModFuncs, err = generateDiffObject(patch.Name, file, originObjectFile)
 	if err != nil {
 		LOG_ERR(err, "Error while finding modified functions in %s", file)
 		return invalidatePatch(patch), err
@@ -508,10 +501,14 @@ func generatePatch(file string, explicitModified, prevExists bool) (dekuPatch, e
 		return invalidatePatch(patch), nil
 	}
 
-	patch.ObjPath, err = findObjectFile(file)
-	if err != nil {
-		return invalidatePatch(patch), err
+	files := findObjectFile(file)
+	if len(files) == 0 {
+		return invalidatePatch(patch), mkError(ERROR_CANT_FIND_OBJ)
+	} else if len(files) > 1 {
+		LOG_ERR(nil, "The file %s is associated with multiple files (%s), which is currently unsupported in DEKU.", file, strings.Join(files, ", "))
 	}
+
+	patch.ObjPath = filepath.Join(kernelBuildDir, files[0])
 
 	// Write the object file path to a file.
 	err = os.WriteFile(filepath.Join(patchDir, FILE_OBJECT_PATH), []byte(patch.ObjPath), 0644)
