@@ -34,7 +34,7 @@ type relocation struct {
 func findObjWithSymbol(sym, srcFile, objPath string) (string, error) {
 	// TODO: Consider checking type of the symbol
 	LOG_DEBUG("Find object file for symbol: %s %s (%s)", sym, srcFile, objPath)
-	if objPath == "vmlinux" {
+	if strings.HasSuffix(objPath, "/vmlinux") {
 		return "vmlinux", nil
 	}
 
@@ -50,7 +50,8 @@ func findObjWithSymbol(sym, srcFile, objPath string) (string, error) {
 	}
 
 	srcPath := filepath.Join(config.kernelSrcDir, filepath.Dir(srcFile))
-	modulesPath := filepath.Join(config.buildDir, filepath.Dir(srcFile))
+	modulesDir := getKernelModulesDir(objPath)
+	modulesPath := filepath.Join(modulesDir, filepath.Dir(srcFile))
 	for {
 		files := readLines(filepath.Join(modulesPath, "modules.order"))
 		for _, file := range files {
@@ -260,8 +261,13 @@ func adjustRelocations(module dekuModule) error {
 			symType = "v"
 		}
 
+		modulesDir := config.buildDir
+		if !strings.HasSuffix(objPath, "/vmlinux") {
+			modulesDir = getKernelModulesDir(objPath)
+		}
+
 		index, err := findSymbolIndex(symbol.Name, symType, srcFile,
-			config.buildDir+symObjPath)
+			modulesDir+symObjPath)
 		if err != nil {
 			if index == -ERROR_CANT_FIND_SYM_INDEX {
 				// check if defined

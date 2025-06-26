@@ -210,7 +210,7 @@ func modifiedFiles() []string {
 	}
 
 	files := []string{}
-	err = filepath.Walk(config.filesSrcDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(config.filesSrcDir, func(fullPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -219,7 +219,20 @@ func modifiedFiles() []string {
 			return nil
 		}
 
-		path = path[len(config.filesSrcDir):]
+		path := fullPath[len(config.filesSrcDir):]
+
+		// check if it's symlink and get the real file
+		if info.Mode()&os.ModeSymlink != 0 {
+			fullPath, err := os.Readlink(fullPath)
+			if err != nil {
+				LOG_ERR(err, "Can't read symlink: %s", fullPath)
+				return nil
+			}
+			info, err = os.Stat(fullPath)
+			if err != nil {
+				return nil
+			}
+		}
 
 		if buildTime.After(info.ModTime()) {
 			return nil
@@ -246,14 +259,8 @@ func modifiedFiles() []string {
 			return nil
 		}
 
-		fileStat, err := os.Stat(config.filesSrcDir + path)
-		if err != nil {
-			LOG_ERR(err, "Can't get stats for file: %s", config.filesSrcDir+path)
-			return nil
-		}
-
-		if isCFile, _ := filepath.Match("*.c", fileStat.Name()); !isCFile {
-			isHFile, _ := filepath.Match("*.h", fileStat.Name())
+		if isCFile := strings.HasSuffix(path, ".c"); !isCFile {
+			isHFile := strings.HasSuffix(path, ".h")
 			if !isHFile || slicesContains(ignoredFilesH, path) {
 				return nil
 			}
@@ -270,14 +277,14 @@ func modifiedFiles() []string {
 					return err
 				}
 
-				LOG_ERR(err, "Can't get stats for file: %s", config.filesSrcDir+path)
+				LOG_ERR(err, "Can't get stats for file: %s", fullPath)
 				return nil
 			}
 
 			if originFileStat != nil {
 				f1, err := os.ReadFile(config.filesSrcDir + path)
 				if err != nil {
-					LOG_ERR(err, "Failed to read file: %s", config.filesSrcDir+path)
+					LOG_ERR(err, "Failed to read file: %s", fullPath)
 					return nil
 				}
 
@@ -304,26 +311,43 @@ func modifiedFiles() []string {
 	return files
 }
 
-func generateSymbols(koFile string) bool {
-	path := filepath.Dir(koFile)
+func getKernelModulesDir(koFile string) string {
+	if config.isAndroid && !config.isModule {
+		vendorModule := filepath.Join(config.androidKernelDir, "out", config.board, "dist", filepath.Base(koFile))
+		if fileExists(vendorModule) {
+			return config.androidModulesDir
+		}
+	}
+
+	return config.buildDir
+}
+
+func generateSymbols(objFile string) bool {
+	path := filepath.Dir(objFile)
 	outDir := filepath.Join(config.workdir, SYMBOLS_DIR, path)
-	outFile := filepath.Join(outDir, filenameNoExt(filepath.Base(koFile)))
+	outFile := filepath.Join(outDir, filenameNoExt(filepath.Base(objFile)))
 
 	if fileExists(outFile) {
 		return true
 	}
 
-	LOG_DEBUG("Generate symbols for: %s", koFile)
+	LOG_DEBUG("Generate symbols for: %s", objFile)
 
 	// Check if the module is enabled in the kernel configuration.
-	modOrders := filepath.Join(config.buildDir, path, "modules.order")
+	koFile := objFile
+	if !strings.HasSuffix(koFile, ".ko") {
+		koFile = strings.Replace(koFile, ".o", ".ko", 1)
+	}
+
+	modulesDir := getKernelModulesDir(koFile)
+	modOrders := filepath.Join(modulesDir, path, "modules.order")
 	modules, err := os.ReadFile(modOrders)
 	if err != nil {
 		LOG_DEBUG("File %s does not exist. Skip", modOrders)
 		return false
 	}
-	if !bytes.Contains(modules, []byte(koFile)) {
-		LOG_DEBUG(fmt.Sprintf("The module %s file is not enabled in the current kernel configuration", koFile))
+	if !bytes.Contains(modules, []byte(objFile)) {
+		LOG_DEBUG(fmt.Sprintf("The module %s file is not enabled in the current kernel configuration", objFile))
 		return false
 	}
 
@@ -332,7 +356,7 @@ func generateSymbols(koFile string) bool {
 		return false
 	}
 
-	path = filepath.Join(config.buildDir, koFile)
+	path = filepath.Join(modulesDir, objFile)
 	readelfCmd := exec.Command("readelf",
 		"--symbols",
 		"--wide",
@@ -428,7 +452,9 @@ func findSymbolIndex(symName, symType, srcFile, objFilePath string) (int, error)
 	} else if len(symbolsInObj) == 1 {
 		symOffset = symbolsInObj[0].offset
 	} else {
-		e, err = Open(config.buildDir + strings.TrimSuffix(srcFile, "c") + "o")
+		baseFile := strings.TrimSuffix(srcFile, ".c")
+		modulesDir := getKernelModulesDir(baseFile + ".ko")
+		e, err = Open(modulesDir + "/" + baseFile + ".o")
 		if err != nil {
 			return -1, err
 		}
@@ -590,39 +616,10 @@ func parseDekuModuleFromNote(note string) dekuModule {
 
 func getDekuModules(includeUnloadModule bool) []dekuModule {
 	modules := []dekuModule{}
-	patches := []dekuPatch{}
+	patches := getValidPatches()
 	files, err := os.ReadDir(config.workdir)
 	if err != nil {
 		return modules
-	}
-
-	for _, patchDir := range files {
-		if !patchDir.IsDir() || !strings.HasPrefix(patchDir.Name(), "patch_") {
-			continue
-		}
-
-		patchDirPath := filepath.Join(config.workdir, patchDir.Name())
-		patchFile := filepath.Join(patchDirPath, "patch.o")
-		patchId, _ := os.ReadFile(filepath.Join(patchDirPath, "id"))
-		srcFile, _ := os.ReadFile(filepath.Join(patchDirPath, FILE_SRC_PATH))
-		objPath, _ := os.ReadFile(filepath.Join(patchDirPath, FILE_OBJECT_PATH))
-		if !fileExists(patchFile) || len(patchId) == 0 || len(srcFile) == 0 || len(objPath) == 0 {
-			continue
-		}
-
-		if id, _ := generatePatchId(string(srcFile)); string(patchId) != id {
-			continue
-		}
-		patch := dekuPatch{
-			SrcFile:   string(srcFile),
-			Name:      patchDir.Name(),
-			ObjPath:   string(objPath),
-			PatchFile: patchFile,
-			Id:        string(patchId),
-			ModFuncs:  readLines(filepath.Join(patchDirPath, MOD_SYMBOLS_FILE)),
-		}
-
-		patches = append(patches, patch)
 	}
 
 	for _, dekuMod := range files {
