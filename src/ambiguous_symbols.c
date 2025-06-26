@@ -30,6 +30,52 @@ typedef struct
 	uint32_t count;
 } AmbiguousSymbol;
 
+static int handleAmbiguousSymbolReference(Symbol *refSym, Symbol *relSym, uint32_t offset)
+{
+	const char *dot = NULL;
+	if (relSym->isVar && (dot = strrchr(relSym->name, '.')) != NULL && isdigit(dot[1]))
+	{
+		if (relSym->data == NULL)
+		{
+			relSym->data = (AmbiguousSymbol *)calloc(1, sizeof(AmbiguousSymbol));
+			if (!CHECK_ALLOC(relSym->data))
+				return -1;
+		}
+
+		struct AmbiguousSymbolRef *referencedFrom = NULL;
+		AmbiguousSymbol *ambiguousSymbol = (AmbiguousSymbol *)relSym->data;
+		for (size_t j = 0; j < ambiguousSymbol->count; j++)
+		{
+			if (ambiguousSymbol->referencedFrom[j].sym == refSym)
+			{
+				referencedFrom = &ambiguousSymbol->referencedFrom[j];
+				break;
+			}
+		}
+
+		if (referencedFrom == NULL)
+		{
+			ambiguousSymbol->count++;
+			ambiguousSymbol->referencedFrom = REALLOC(ambiguousSymbol->referencedFrom,
+														ambiguousSymbol->count * sizeof(struct AmbiguousSymbolRef));
+			referencedFrom = &ambiguousSymbol->referencedFrom[ambiguousSymbol->count - 1];
+			memset(referencedFrom, 0, sizeof(*referencedFrom));
+			referencedFrom->sym = refSym;
+		}
+
+		referencedFrom->count++;
+		uint32_t count = referencedFrom->count;
+		referencedFrom->offset = REALLOC(referencedFrom->offset,
+											count * sizeof(uint32_t));
+		if (referencedFrom->offset == NULL)
+			return -1;
+
+		referencedFrom->offset[count-1] = offset - refSym->sym.st_value;
+	}
+
+	return 0;
+}
+
 /*
  * Get object symbols with suffix ".<NUM>" that are generated from local symbols
  * with the same name in one file. The number in the suffix might be different
@@ -42,6 +88,23 @@ static int getAmbiguousSymbols(Context *ctx)
 	Elf_Scn *scn = NULL;
 	GElf_Shdr shdr;
 	GElf_Rela rela;
+
+	size_t dataOnceSecIndex = 0;
+	size_t dataOnceSymIndex = 0;
+	Elf_Scn *dataOnceSec = getSectionByName(ctx->elf, ".data..once");
+	if (dataOnceSec != NULL)
+	{
+		dataOnceSecIndex = elf_ndxscn(dataOnceSec);
+		for (size_t i = 0; i < ctx->symbolsCount; i++)
+		{
+			Symbol *s = ctx->symbols[i];
+			if (s->sym.st_shndx == dataOnceSecIndex && ELF64_ST_TYPE(s->sym.st_info) == STT_SECTION)
+			{
+				dataOnceSymIndex = i;
+				break;
+			}
+		}
+	}
 
 	while ((scn = elf_nextscn(ctx->elf, scn)) != NULL)
 	{
@@ -60,8 +123,6 @@ static int getAmbiguousSymbols(Context *ctx)
 			goto err;
 
 		size_t cnt = shdr.sh_size / shdr.sh_entsize;
-
-		Symbol *sym;
 		for (size_t i = 0; i < cnt; i++)
 		{
 			if (gelf_getrela(data, i, &rela) == NULL)
@@ -71,7 +132,7 @@ static int getAmbiguousSymbols(Context *ctx)
 			if (symIndex == 0)
 				continue;
 
-			sym = NULL;
+			Symbol *refSym = NULL;
 			for (size_t j = 0; j < ctx->symbolsCount; j++)
 			{
 				Symbol *s = ctx->symbols[j];
@@ -81,55 +142,31 @@ static int getAmbiguousSymbols(Context *ctx)
 				if ((size_t)rela.r_offset >= s->sym.st_value &&
 					(size_t)rela.r_offset < s->sym.st_value + s->sym.st_size)
 				{
-					sym = s;
+					refSym = s;
 					break;
 				}
 			}
 
-			if (sym == NULL)
+			if (refSym == NULL)
 				continue;
 
+			// Fix relocated symbol pointed to the .data..once section
 			Symbol *relSym = getSymbolForRelocation(ctx, rela);
-			const char *dot = NULL;
-			if (relSym->isVar && (dot = strchr(relSym->name, '.')) != NULL && isdigit(dot[1]))
+			if (dataOnceSymIndex > 0 && symIndex == dataOnceSymIndex)
 			{
-				if (relSym->data == NULL)
+				for (size_t j = 0; j < ctx->symbolsCount; j++)
 				{
-					relSym->data = (AmbiguousSymbol *)calloc(1, sizeof(AmbiguousSymbol));
-					if (!CHECK_ALLOC(relSym->data))
-						goto err;
-				}
-
-				struct AmbiguousSymbolRef *referencedFrom = NULL;
-				AmbiguousSymbol *ambiguousSymbol = (AmbiguousSymbol *)relSym->data;
-				for (size_t j = 0; j < ambiguousSymbol->count; j++)
-				{
-					if (ambiguousSymbol->referencedFrom[j].sym == sym)
+					Symbol *s = ctx->symbols[j];
+					if (s->sym.st_shndx == dataOnceSecIndex && s->sym.st_value == rela.r_addend + 5 &&
+						ELF64_ST_TYPE(s->sym.st_info) != STT_SECTION)
 					{
-						referencedFrom = &ambiguousSymbol->referencedFrom[j];
+						relSym = s;
 						break;
 					}
 				}
-
-				if (referencedFrom == NULL)
-				{
-					ambiguousSymbol->count++;
-					ambiguousSymbol->referencedFrom = REALLOC(ambiguousSymbol->referencedFrom,
-															  ambiguousSymbol->count * sizeof(struct AmbiguousSymbolRef));
-					referencedFrom = &ambiguousSymbol->referencedFrom[ambiguousSymbol->count - 1];
-					memset(referencedFrom, 0, sizeof(*referencedFrom));
-					referencedFrom->sym = sym;
-				}
-
-				referencedFrom->count++;
-				uint32_t count = referencedFrom->count;
-				referencedFrom->offset = REALLOC(referencedFrom->offset,
-												 count * sizeof(uint32_t));
-				if (referencedFrom->offset == NULL)
-					goto err;
-
-				referencedFrom->offset[count-1] = rela.r_offset - sym->sym.st_value;
 			}
+
+			handleAmbiguousSymbolReference(refSym, relSym, rela.r_offset);
 		}
 	}
 

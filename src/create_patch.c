@@ -245,6 +245,15 @@ static Elf_Scn *copySection(Context *ctx, Elf64_Section index, bool copyData)
 		if (oldData->d_buf)
 			memcpy(newData->d_buf, oldData->d_buf, oldData->d_size);
 	}
+
+	if (oldShdr.sh_type != SHT_RELA && oldShdr.sh_link != SHN_UNDEF &&
+		oldShdr.sh_link < ctx->sectionsCount)
+	{
+		if (ctx->copiedScnMap[oldShdr.sh_link] == NULL)
+			LOG_INFO("Can't fill .sh_link for %s as pointed section was not copied", symName);
+		else
+			newShdr.sh_link = elf_ndxscn(ctx->copiedScnMap[oldShdr.sh_link]);
+	}
 	if (gelf_update_shdr(newScn, &newShdr) == 0)
 		return NULL;
 	if (gelf_update_shdr(strtabScn, &strshdr) == 0)
