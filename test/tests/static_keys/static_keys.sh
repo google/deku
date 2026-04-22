@@ -88,7 +88,7 @@ test()
 {
 	local text="pr_info(\"testStaticKeys\");"
 	local cmd="wget --timeout=1 --tries=3 192.168.0.1 2>/dev/null"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local file="$srcDir/net/ipv4/tcp_ipv4.c"
 
 	prepareKernelAndDeploy $KERNEL_VER || exitError 1
@@ -166,6 +166,7 @@ test()
 
 main()
 {
+	[[ $ANDROID ]] && return
 	test
 }
 

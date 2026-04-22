@@ -14,7 +14,7 @@ TAGS=test/tags/tags
 modifyAllFunctionsAtOnce()
 {
 	local text="[$SCRIPT_NAME] DEKU $function test"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 #prepareKernelAndDeploy
 	revertChanges
 

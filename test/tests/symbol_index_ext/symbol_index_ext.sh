@@ -5,6 +5,8 @@
 #
 # Test if valid index for modified symbol is chosen
 
+# DEPRECATED
+
 FILES="net/bluetooth/mgmt.c"
 DESCRIPTION="Symbol index ext"
 . test/common.sh
@@ -17,7 +19,7 @@ symbolIndexTest()
 	local kernelversion=$4
 	local modname="$(generateModuleName $file)"
 	local moduledir="$WORKDIR/$modname"
-	local srcDir=$(sourceDir $kernelversion)
+	local srcDir=$SOURCE_DIR
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 

@@ -15,7 +15,7 @@ checkTracepointString()
 {
 	local file=$1
 	local function=$2
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"\");"
 

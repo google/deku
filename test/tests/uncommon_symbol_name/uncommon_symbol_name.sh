@@ -11,7 +11,7 @@ DESCRIPTION="Uncommon symbol name"
 
 test()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	appendToFunction "$srcDir/sound/soc/codecs/rt286.c" "rt286_set_dai_fmt" "WARN_ON(1);"
 	[[ -f "$srcDir/net/devlink/health.c" ]] && appendToFunction "$srcDir/net/devlink/health.c" "devlink_health_report" "WARN_ON(1);"
 	dekuBuild || exit 1

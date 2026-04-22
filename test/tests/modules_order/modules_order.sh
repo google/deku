@@ -6,6 +6,8 @@
 # Test if modules are loaded and unloaded in the correct order. This test takes module dependencies
 # into account
 
+# DEPRECATED
+
 FILES="drivers/input/input-mt.c drivers/gpu/drm/drm_atomic_uapi.c"
 DESCRIPTION="Modules order"
 KERNEL=$KERNEL_VERSION_5_15
@@ -19,7 +21,7 @@ test()
 	local file2="drivers/gpu/drm/drm_atomic_uapi.c"
 	local function2="drm_atomic_plane_set_property"
 	local functionHeader2="static int drm_atomic_plane_set_property"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	prepareKernelAndDeploy $KERNEL_VERSION_5_15
 	runQemu

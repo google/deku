@@ -17,7 +17,7 @@ DESCRIPTION="multiple_func"
 test()
 {
 	local text="pr_info(\"test\");"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	prepareKernelAndDeploy $KERNEL_VER +CONFIG_NF_SOCKET_IPV6 +CONFIG_NF_TPROXY_IPV6
 

@@ -401,7 +401,7 @@ func build(modulesOnDevice []dekuModule) (dekuModule, error) {
 		}
 	}
 
-	if config.board != "" && !config.ignoreCross {
+	if !config.isAndroid && config.board != "" && !config.ignoreCross {
 		cros.preBuild()
 		defer cros.postBuild()
 	}

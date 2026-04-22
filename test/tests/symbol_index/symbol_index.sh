@@ -15,7 +15,7 @@ modifyFunction()
 	local function=$2
 	local text=$3
 	local index=$4
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
     sed -i "1s/^/static unsigned long long DEKU_TEST_INDEX = ${index}000000000;\n/" "$srcDir/$file"
 	appendToFunction "$srcDir/$file" \
@@ -117,6 +117,7 @@ test()
 
 main()
 {
+	[[ $ANDROID ]] && return
 	if [[ $LOCAL_TEST != "" ]]; then
 		:
 	else

@@ -13,7 +13,7 @@ mappingTest()
 {
 	local file="net/ipv4/tcp_ipv4.c"
 	local text="[$SCRIPT_NAME] DEKU %s"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local functions=(tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_send_ack)
 	local functions2=(tcp_v4_connect tcp_v4_mtu_reduced do_redirect tcp_ld_RTO_revert tcp_v4_err tcp_v4_send_reset tcp_v4_send_ack tcp_v4_timewait_ack tcp_v4_reqsk_send_ack tcp_v4_inbound_md5_hash tcp_v4_init_req tcp_v4_route_req tcp_v4_conn_request tcp_v4_syn_recv_sock)
 	local functionsFun=(tcp_v4_init_seq tcp_v4_init_ts_off tcp_twsk_unique tcp_v4_pre_connect tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_inbound_md5_hash  tcp_v4_send_synack tcp_v4_reqsk_destructor)
@@ -81,6 +81,7 @@ main()
 	[[ $KERNEL_VER == v6.6 ]] && return;
 	[[ $KERNEL_VER == v6.12 ]] && return;
 	[[ $KERNEL_VER == upstream ]] && return;
+	[[ $ANDROID ]] && return]]
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		:

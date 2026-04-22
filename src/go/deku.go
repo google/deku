@@ -194,7 +194,7 @@ func main() {
 	}
 
 	if action == "deploy" {
-		if config.deployParams != "" || config.isAndroid {
+		if config.deployParams != "" {
 			err = CheckDeviceConnection()
 			if err != nil {
 				LOG_ERR(nil, "Failed to connect to the device: %s", config.deployParams)

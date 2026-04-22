@@ -16,13 +16,13 @@ functionCallTest()
 	local function=$2
 	local cmd=$3
 	local text="[$SCRIPT_NAME] DEKU $function test"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	logStep "Pre the $file..."
 	revertChanges
 	dekuDeploy || exitError 1
 	local sudo=
-	[[ $VM_TEST ]] && sudo=sudo
+	[[ $VM_TEST ]] && sudo=sudo || cmd=${cmd//sudo/}
 	loadedModules=$(remoteShOut "find /sys/module -name .note.deku -type f -exec $sudo grep deku_ {} \;")
 	[[ "$loadedModules" ]] && logErr "Detected unexpected loaded modules: $loadedModules" && exitError 2
 
@@ -43,23 +43,31 @@ functionCallTest()
 
 test()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local fairSched="kernel/sched/fair.c"
+	local downloadCmd="curl --silent --head unknown.com 2>&1 > /dev/null; curl --silent --head google.com 2>&1 > /dev/null; curl --silent --head google.eu 2>&1 > /dev/null; curl --silent --head bing.com 2>&1 > /dev/null;"
+	downloadCmd+="wget --quiet --spider unknown.com 2>&1 > /dev/null; wget --quiet --spider google.com 2>&1 > /dev/null; wget --quiet --spider google.eu 2>&1 > /dev/null; wget --quiet --spider bing.com 2>&1 > /dev/null;"
 	[[ -s "$srcDir/kernel/sched/fair_eevdf.c" ]] && fairSched="kernel/sched/fair_eevdf.c"
 
-	functionCallTest "net/ipv4/arp.c" "arp_create" "CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider unknown.com; wget -q --spider google.com"
-	functionCallTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "wget -q --spider google.com"
+	if [[ ! $ANDROID ]]; then
+		functionCallTest "net/ipv4/arp.c" "arp_create" "sudo ip -s -s neigh flush all >/dev/null; $downloadCmd"
+	fi
+	functionCallTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "$downloadCmd"
 	functionCallTest "fs/timerfd.c" "timerfd_triggered" "sleep 2; dmesg | grep -q timerfd_triggered || { grep -q CHROMEOS /etc/lsb-release && /usr/local/autotest/bin/autologin.py > /dev/null 2>&1; }"
 	functionCallTest "fs/readdir.c" "filldir64" "sleep 2"
 	if [[ $KERNEL_VERSION == v6.14* || $KERNEL_VERSION == v6.16* ]]; then
 		functionCallTest "mm/vma.c" "mmap_region" "sleep 2"
 	else
-		functionCallTest "mm/mmap.c" "mmap_region" "sleep 2"
+		if [[ ! $ANDROID ]]; then
+			functionCallTest "mm/mmap.c" "mmap_region" "sleep 2"
+		fi
 	fi
 	functionCallTest $fairSched "pick_next_task_fair" "sleep 1"
 	# ? functionCallTest "kernel/sched/core.c" "select_task_rq" "sleep 2"
-	# functionCallTest "net/core/neighbour.c" "neigh_alloc" "CMD='ip -s -s neigh flush all'; eval \$CMD; eval sudo \$CMD; wget -q --spider unknown.com; wget -q --spider google.com; wget -q --spider google.eu; wget -q --spider bing.com"
-	functionCallTest "net/ethernet/eth.c" eth_type_trans "CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com"
+	# functionCallTest "net/core/neighbour.c" "neigh_alloc" "sudo ip -s -s neigh flush all; $downloadCmd"
+	if [[ ! $ANDROID ]]; then
+		functionCallTest "net/ethernet/eth.c" eth_type_trans "sudo ip -s -s neigh flush all >/dev/null; $downloadCmd"
+	fi
 }
 
 main()

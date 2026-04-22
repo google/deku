@@ -15,7 +15,7 @@ checkNoValidChanges()
 	local file=$1
 	local validfunction=$2
 	local novalidfunction=$3
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	appendToFunction "$srcDir/$file" $validfunction "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU test\");"
 

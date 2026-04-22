@@ -22,7 +22,7 @@ function isTraceable()
 function findNontraceable()
 {
 	local bind=$1
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local files=`find "$BUILD_DIR/drivers" -name "*.o"  -not -path "*lib*"`
 	while read -r file;
 	do
@@ -60,7 +60,7 @@ checkNontraceable()
 	local file=$1
 	local function=$2
 	local status=$3
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	revertChanges
 

@@ -15,7 +15,7 @@ test()
 	local function="tcp_v4_connect"
 	local text="${ScriptName}DEKUDEKUDEKUTEST"
 	local newtext="${ScriptName}dekutestdeku"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	appendToFunction "$srcDir/$file" $function "printk(KERN_INFO \"$text\");"
 
@@ -34,6 +34,7 @@ test()
 
 main()
 {
+	[[ $ANDROID ]] && return
 	if [[ $LOCAL_TEST != "" ]]; then
 		:
 	else

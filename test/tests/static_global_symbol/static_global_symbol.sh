@@ -13,7 +13,7 @@ checkLocalSymbol()
 {
 	local file="net/ipv4/route.c"
 	local function="ipv4_blackhole_route"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	[[ $KERNEL_VER == v5.10 ]] && return
 
@@ -23,7 +23,7 @@ checkLocalSymbol()
 	local koFile=$(find $WORKDIR -name "deku_*.ko")
 	logStep -n "Local symbol is marked as a '.klp.sym.'... "
 	readelf -s -W "$koFile" >> $LOG_FILE
-	if [[ $KERNEL_VER == v6.1 || $KERNEL_VER == v6.12 ]]; then
+	if [[ $KERNEL_VER == v6.1 || ( $KERNEL_VER == v6.12 && ! $ANDROID ) ]]; then
 		readelf -s -W "$koFile" | grep -q ".klp.sym.vmlinux.dst_discard,1"  || { logErr "Fail"; exitError 2; }
 	else
 		readelf -s -W "$koFile" | grep -q ".klp.sym.vmlinux.dst_discard,2"  || { logErr "Fail"; exitError 2; }

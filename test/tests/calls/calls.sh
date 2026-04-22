@@ -5,6 +5,7 @@
 #
 # Test if all callers are properly detected
 
+# DEPRECATED
 . test/common.sh
 
 main()

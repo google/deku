@@ -13,7 +13,7 @@ DESCRIPTION="Weak function"
 
 test()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	appendBeforeFunction "$srcDir/net/ipv4/tcp_ipv4.c" tcp_v4_connect 'void weak_fun(void);\n\nvoid __weak weak_fun(void){printk(KERN_INFO "weak function called from %s", __FILE__);}'
 	appendBeforeFunction "$srcDir/arch/x86/kernel/itmt.c" sched_set_itmt_core_prio 'void weak_fun(void);\n\nvoid weak_fun(void){printk(KERN_INFO "weak function called from %s", __FILE__);}'
@@ -62,6 +62,7 @@ test()
 
 main()
 {
+	[[ $ANDROID ]] && return
 	if [[ $LOCAL_TEST != "" ]]; then
 		:
 	else

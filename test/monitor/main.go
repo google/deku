@@ -7,14 +7,38 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	ui "github.com/webui-dev/go-webui/v2"
 )
 
-var w ui.Window
-var testStarted = false
-var activeSystems = []string{}
+type Agent struct {
+	name          string
+	lastTestIndex int
+	index         int
+}
+
+type TestEntity struct {
+	name    string
+	system  string
+	kernel  string
+	status  string
+	agent   *Agent
+	started time.Time
+}
+
+var (
+	w             ui.Window
+	testStarted   = false
+	activeSystems = []string{}
+	mutex         sync.Mutex
+
+	tests           = []TestEntity{}
+	allAgents       = []Agent{}
+	agentsPerSystem = make(map[string][]string)
+	scheduledTests  = []TestEntity{}
+)
 
 type KernelSet struct {
 	name    string
@@ -25,6 +49,7 @@ var kernelSets = []KernelSet{
 	KernelSet{"qemu", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12", "origin/master"}},
 	KernelSet{"cros", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12"}},
 	KernelSet{"vm-ubuntu", []string{"v6.8", "v6.11", "v6.14"}},
+	KernelSet{"android", []string{"v6.12"}},
 }
 
 var testNames = []string{
@@ -59,20 +84,6 @@ var testNames = []string{
 	"oot_module",
 }
 
-type TestEntity struct {
-	name    string
-	system  string
-	kernel  string
-	status  string
-	agent   string
-	started time.Time
-}
-
-var tests = []TestEntity{}
-var allAgents = []string{}
-var agentsPerSystem = make(map[string][]string)
-var scheduledTests = []TestEntity{}
-
 func slicesIndex(s []string, v string) int {
 	for i := range s {
 		if v == s[i] {
@@ -86,13 +97,10 @@ func slicesContains(s []string, name string) bool {
 	return slicesIndex(s, name) != -1
 }
 
-func myCountFunc(e ui.Event) any {
-	// count, _ := e.Window.Script("return count;", ui.ScriptOptions{})
-	// i, _ := strconv.Atoi(count)
-	// e.Window.Run(fmt.Sprintf("SetCount(%v);", i+10))
-	// e.Window.Run(fmt.Sprintf("SetCount(%s);", "testName"))
-	addTests(e.Window)
-	return nil
+func runJS(cmd string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	w.Run(cmd)
 }
 
 func getKernelSet(system string) KernelSet {
@@ -114,8 +122,17 @@ func getSystemForAgent(agent string) string {
 	}
 }
 
+func getAgentByName(name string) *Agent {
+	for i, agent := range allAgents {
+		if agent.name == name {
+			return &allAgents[i]
+		}
+	}
+	return nil
+}
+
 func runTest(agent string) {
-	w.Run(fmt.Sprintf("runTest('%s');", agent))
+	runJS(fmt.Sprintf("runTest('%s');", agent))
 }
 
 func runCountForSystem(system, testName string) int {
@@ -165,6 +182,7 @@ func findNextTestIndexFor(agent string) int {
 	} else {
 		systems = append(systems, getKernelSet("qemu"))
 		systems = append(systems, getKernelSet("vm-ubuntu"))
+		systems = append(systems, getKernelSet("android"))
 	}
 
 	for _, system := range systems {
@@ -175,7 +193,7 @@ func findNextTestIndexFor(agent string) int {
 		var agentIndex = slicesIndex(agentsPerSystem[getSystemForAgent(agent)], agent)
 		var agentsCount = 0
 		for _, a := range allAgents {
-			if getSystemForAgent(a) == getSystemForAgent(agent) {
+			if getSystemForAgent(a.name) == getSystemForAgent(agent) {
 				agentsCount++
 			}
 		}
@@ -242,23 +260,25 @@ func findNextTestIndexFor(agent string) int {
 
 func setKernelSets(w ui.Window) {
 	for _, system := range kernelSets {
-		activeSystems = append(activeSystems, system.name)
+		if system.name != "android" {
+			activeSystems = append(activeSystems, system.name)
+		}
 		kernels := ""
 		for _, kernel := range system.kernels {
 			kernels += ", '" + kernel + "'"
 		}
-		w.Run(fmt.Sprintf("addKernelSet('%s' %s);", system.name, kernels))
+		runJS(fmt.Sprintf("addKernelSet('%s' %s);", system.name, kernels))
 	}
 }
 
 func addTests(w ui.Window) {
 	for _, test := range testNames {
-		w.Run(fmt.Sprintf("addTest('%s');", test))
+		runJS(fmt.Sprintf("addTest('%s');", test))
 	}
 }
 
 func showAgents(w ui.Window) {
-	w.Run(fmt.Sprintf("showAgents('%s');", "test"))
+	runJS(fmt.Sprintf("showAgents('%s');", "test"))
 }
 
 const TESTS_MAIN_DIR = "/usr/local/google/home/mmaslanka/"
@@ -333,14 +353,16 @@ func runTestOnAgent(agent string, index int, rerun bool) {
 	if rerun {
 		rerunParam = "--rerun"
 	}
-	agentIndex := slicesIndex(allAgents, agent)
-	testParams := fmt.Sprintf("--test %s --system %s --kernel %s --index %d %s", test.name, test.system, test.kernel, agentIndex, rerunParam)
+	ag := getAgentByName(agent)
+	testParams := fmt.Sprintf("--test %s --system %s --kernel %s --index %d %s", test.name, test.system, test.kernel, ag.index, rerunParam)
 	if test.system == "qemu" {
 		testParams += fmt.Sprintf(" --lts")
 	} else if test.system == "cros" {
 		testParams += fmt.Sprintf(" --chromebook --port %d", 2244)
 	} else if test.system == "vm-ubuntu" {
 		testParams += fmt.Sprintf(" --vm --port %d", 22220)
+	} else if test.system == "android" {
+		// testParams += fmt.Sprintf("")
 	}
 
 	err := os.WriteFile(TESTS_MAIN_DIR+"/deku_test/job/"+agent, []byte(testParams), 0644)
@@ -351,8 +373,9 @@ func runTestOnAgent(agent string, index int, rerun bool) {
 	test.status = "Running on " + agent
 	tests[index].status = "Running on " + agent
 	tests[index].started = time.Now()
-	tests[index].agent = agent
-	w.Run(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", test.name, test.system, test.kernel, "..."))
+	tests[index].agent = ag
+	ag.lastTestIndex = index
+	runJS(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", test.name, test.system, test.kernel, "..."))
 }
 
 func scheduleTestOnAgent(e ui.Event) any {
@@ -370,16 +393,26 @@ func scheduleTestOnAgent(e ui.Event) any {
 				continue
 			}
 			for _, testName := range testNames {
-				scheduledTests = append(scheduledTests, TestEntity{testName, system, kernel, "", "", time.Now()})
+				scheduledTests = append(scheduledTests, TestEntity{testName, system, kernel, "", nil, time.Now()})
 			}
 		}
 	} else {
-		test := TestEntity{testName, system, kernel, "", agent, time.Now()}
+		test := TestEntity{testName, system, kernel, "", getAgentByName(agent), time.Now()}
 		if priority == "high" {
 			scheduledTests = append([]TestEntity{test}, scheduledTests...)
 		} else {
 			scheduledTests = append(scheduledTests, test)
 		}
+	}
+	return nil
+}
+
+func reRunTest(e ui.Event) any {
+	args, _ := ui.GetArg[string](e)
+	agent := strings.Split(args, " ")[0]
+	if agent == "sdsd" {
+
+		runTestOnAgent(agent, getAgentByName(agent).lastTestIndex, true)
 	}
 	return nil
 }
@@ -403,7 +436,7 @@ func watchForAgents() {
 	lastWaitCheckTime := time.Time{}
 
 	for {
-		w.Run("clearAgents();")
+		runJS("clearAgents();")
 
 		doneAgents := getAgentFor("done")
 		for _, agent := range doneAgents {
@@ -420,13 +453,12 @@ func watchForAgents() {
 
 				tests[index].started = time.Time{}
 				os.Remove(TESTS_MAIN_DIR + "/deku_test/done/" + agent)
-				w.Run(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", tests[index].name, tests[index].system, tests[index].kernel, status))
+				runJS(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", tests[index].name, tests[index].system, tests[index].kernel, status))
 				fmt.Printf("Done job: %s [%s %s]: %s\n", tests[index].name, tests[index].system, tests[index].kernel, tests[index].status)
 			}
 		}
 
-		text := "Waiting:"
-		text += "<br />"
+		agentsStatusText := ""
 		waitingAgents := getAgentFor("wait")
 		if time.Since(lastWaitCheckTime) > 20*time.Second {
 			for _, agent := range waitingAgents {
@@ -439,11 +471,16 @@ func watchForAgents() {
 		}
 
 		for _, agent := range waitingAgents {
-			text += agent
+			agentsStatusText += "<div class=\"agentStatusText\">[Waiting] " + agent
 
-			if slicesIndex(allAgents, agent) == -1 {
-				allAgents = append(allAgents, agent)
+			if getAgentByName(agent) == nil {
+				allAgents = append(allAgents, Agent{agent, -1, len(allAgents)})
 				agentsPerSystem[getSystemForAgent(agent)] = append(agentsPerSystem[getSystemForAgent(agent)], agent)
+			}
+			ag := getAgentByName(agent)
+			if ag.lastTestIndex != -1 {
+				test := tests[ag.lastTestIndex]
+				agentsStatusText += fmt.Sprintf(`<span class="reRunLastTest" onclick=\'runTestOnAgent("%s", "%s", "%s", "%s", true)\' title="Run %s"></span>`, agent, test.name, test.system, test.kernel, test.name)
 			}
 
 			jobAgents := getAgentFor("job")
@@ -452,7 +489,7 @@ func watchForAgents() {
 				fileInfo, err := os.Stat(TESTS_MAIN_DIR + "/deku_test/job/" + agent)
 				if err != nil {
 					fmt.Println(err)
-					text += "<br />"
+					agentsStatusText += "</div>"
 					continue
 				}
 
@@ -465,28 +502,28 @@ func watchForAgents() {
 					continue
 				}
 
-				text += fmt.Sprintf("[%v]", elapsed)
-				text += "<br />"
+				agentsStatusText += fmt.Sprintf(" [%v]", elapsed)
+				agentsStatusText += "</div>"
 				continue
 			}
 
-			text += "<br />"
-			w.Run(fmt.Sprintf("addAgent('%s');", agent))
+			agentsStatusText += "</div>"
+			runJS(fmt.Sprintf("addAgent('%s');", agent))
 
 			if len(scheduledTests) > 0 {
 				st := scheduledTests[0]
-				if st.agent == "" /*&& getSystemForAgent(agent) == st.system*/ {
+				if st.agent == nil /*&& getSystemForAgent(agent) == st.system*/ {
 					if st.system == "cros" {
 						if strings.Contains(agent, "cros") {
-							st.agent = agent
+							st.agent = ag
 						}
 					} else {
 						if !strings.Contains(agent, "cros") {
-							st.agent = agent
+							st.agent = ag
 						}
 					}
 				}
-				if st.agent == agent {
+				if st.agent.name == agent {
 					scheduledTests = scheduledTests[1:]
 					runTestOnAgent(agent, getTestIndexFor(st.name, st.system, st.kernel), true)
 					continue
@@ -505,45 +542,42 @@ func watchForAgents() {
 			runTestOnAgent(agent, index, false)
 		}
 
-		text += "<br />"
-		text += "Running:"
-		text += "<br />"
 		pendingAgents := getAgentFor("pending")
 		for _, agent := range pendingAgents {
-			text += agent
-			w.Run(fmt.Sprintf("addAgent('%s');", agent))
+			agentsStatusText += "<div class=\"agentStatusText\">[Running] " + agent
+			runJS(fmt.Sprintf("addAgent('%s');", agent))
 
 			index := getTestIndexFromAgentFile(agent, "pending")
 			if index == -1 {
 				fmt.Println("Error to find information about pending job for " + agent)
-				text += "<br />"
+				agentsStatusText += "</div>"
 				continue
 			}
 			line := getLineFromAgentFile(agent, "pending", 0)
 			if line == "" {
-				text += "<br />"
+				agentsStatusText += "</div>"
 				continue
 			}
 			r := regexp.MustCompile(`.*--test ([^ .]+) --system ([^ .]+) --kernel ([^ ]+)[ $]+.*`)
 			params := r.FindStringSubmatch(line)
-			text += fmt.Sprintf(" [%s %s %s]", params[1], params[2], params[3])
-			text += "<br />"
+			agentsStatusText += fmt.Sprintf(" [%s %s %s]", params[1], params[2], params[3])
+			agentsStatusText += "</div>"
 			test := tests[index]
 			status := `<div align="center"><img height=22pt src="running2.png" /></div>`
-			w.Run(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", test.name, test.system, test.kernel, status))
+			runJS(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", test.name, test.system, test.kernel, status))
 		}
 
 		for _, test := range tests {
 			if !test.started.IsZero() && time.Now().After(test.started.Add(20*time.Minute)) {
-				if slicesContains(pendingAgents, test.agent) {
+				if slicesContains(pendingAgents, test.agent.name) {
 					fmt.Println("Found stalled test", test)
-					w.Run(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", test.name, test.system, test.kernel, "Broken agent"))
-					test.agent = ""
+					runJS(fmt.Sprintf("setTestStatus('%s', '%s', '%s', '%s');", test.name, test.system, test.kernel, "Broken agent"))
+					test.agent = nil
 				}
 			}
 		}
 
-		w.Run(fmt.Sprintf("showAgents('%s');", text))
+		runJS(fmt.Sprintf("showAgents('%s');", agentsStatusText))
 		time.Sleep(time.Second / 4)
 	}
 }
@@ -560,7 +594,7 @@ func startTests(e ui.Event) any {
 			}
 		}
 	}
-	w.Run(fmt.Sprintf("document.getElementById('StartButton').innerHTML = '%s';", text))
+	runJS(fmt.Sprintf("document.getElementById('StartButton').innerHTML = '%s';", text))
 	return nil
 }
 
@@ -578,7 +612,7 @@ func initTests() {
 	for _, testName := range testNames {
 		for _, system := range kernelSets {
 			for _, kernel := range system.kernels {
-				tests = append(tests, TestEntity{testName, system.name, kernel, "", "", time.Time{}})
+				tests = append(tests, TestEntity{testName, system.name, kernel, "", nil, time.Time{}})
 			}
 		}
 	}
@@ -587,12 +621,14 @@ func initTests() {
 func main() {
 	initTests()
 
+	// ui.setLogging(true)
 	w = ui.NewWindow()
 	w.Bind("", events)
 	w.Bind("StartButton", startTests)
 	ui.Bind(w, "scheduleTestOnAgent", scheduleTestOnAgent)
 	ui.Bind(w, "filteredSystemToRunTests", filteredSystemToRunTests)
 	ui.Bind(w, "setSuccessTestStatus", setSuccessTestStatus)
+	ui.Bind(w, "reRunTest", reRunTest)
 	w.ShowBrowser("index.html", ui.ChromiumBased)
 	ui.Wait()
 }

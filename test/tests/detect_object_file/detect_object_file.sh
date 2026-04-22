@@ -14,7 +14,7 @@ checkDetectionObjectFile()
 {
 	local text="pr_info(\"test\");"
 	local srcfile=drivers/input/misc/uinput.c
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	logStep "Check if basic generate module works"
 	prepareKernelAndDeploy $KERNEL_VER CONFIG_INPUT_UINPUT
@@ -65,6 +65,7 @@ test()
 
 main()
 {
+	[[ $ANDROID ]] && return
 	if [[ $LOCAL_TEST != "" ]]; then
 		:
 	else

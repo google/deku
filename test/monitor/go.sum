@@ -1,4 +1,2 @@
 github.com/webui-dev/go-webui/v2 v2.4.3-0.20250131153525-b3e9455187a1 h1:tOS/g/3ca2YKlYskQtY5Z2cCksEZXDSK65Jb9dF6ZUc=
 github.com/webui-dev/go-webui/v2 v2.4.3-0.20250131153525-b3e9455187a1/go.mod h1:wAuoPsuZW60krM633fOFAQFtnRgzFD1dGDRHQd6lfPY=
-github.com/webui-dev/webui v0.0.0-20250325201231-9dd20b5c98b5 h1:5T0bMok4CGCtCm7ed7PQn2u4EUDv98ilrKCaWh67fbY=
-github.com/webui-dev/webui v0.0.0-20250325201231-9dd20b5c98b5/go.mod h1:/jtfG9N1lGg8McUx/rsPD0okOSNGUhuHinbAbmjtwTc=

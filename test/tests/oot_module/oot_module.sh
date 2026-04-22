@@ -11,7 +11,7 @@ DESCRIPTION="Out-of-tree module"
 
 checkOotModule()
 {
-	local buildDir=$(buildDir $KERNEL_VERSION)
+	local buildDir=$BUILD_DIR
 	local originModDir=test/tests/oot_module
 	local modDir=/tmp/deku_test_oot_module
 	local dekuModDir=$modDir
@@ -29,13 +29,15 @@ checkOotModule()
 		modDir=/tmp/deku-vm-mount/deku_test_oot_module
 		dekuModDir=../deku_test_oot_module
 		SUDO=sudo
+	elif [[ $ANDROID ]]; then
+		:
 	else
 		buildDir="/kernel/${BUILD_DIR##*/}"
 		linuxHeaders="-k $buildDir"
 	fi
 
 	logStep "Cleanup..."
-	dekuDeploy
+	dekuDeploy || exitError
 	remoteSh "rmmod test_module.ko 2>/dev/null || sudo rmmod test_module.ko 2>/dev/null"
 
 	logStep "Build and load module..."
@@ -50,6 +52,17 @@ checkOotModule()
 		make -C $modDir KERNEL_DIR=$buildDir LLVM=1 || exitError
 		copyToRemote "$modDir/test_module.ko"
 		remoteSh "insmod test_module.ko"
+	elif [[ $ANDROID ]]; then
+		local llvm=
+		for file in ~/aluminium-kernel/out/bazel/output_user_root/*/execroot/_main/prebuilts/clang/host/linux-x86/clang-*/bin/clang; do
+			llvm=$(dirname $file)
+			[[ $llvm == *clang-r536225* ]] && break
+		done
+		echo "LLVM: $llvm"
+		make -C $modDir KERNEL_DIR=$buildDir LLVM=$llvm/ || exitError
+		remoteSh "mkdir -p $modDir"
+		copyToRemote "$modDir/test_module.ko" "$modDir/"
+		remoteSh "insmod $modDir/test_module.ko"
 	else
 		runCmd "make -C $modDir KERNEL_DIR=$buildDir" || exitError
 		copyToRemote "$modDir/test_module.ko" "/tmp/"
@@ -94,7 +107,7 @@ checkOotModule()
 	# 	grep -q "The 'helper_print_init_message' function is forbidden to modify. The function is non-local" <<< "$out" || exitError
 	# fi
 
-	if [[ $VM_TEST == "" && $KERNEL_VERSION != v6.16* ]]; then
+	if [[ $VM_TEST == "" && $ANDROID == "" && $KERNEL_VERSION != v6.16* ]]; then
 		logStep "Check if no-valid kernel headers are detected..."
 		out=$(dekuDeploy --stdout --builddir $dekuModDir) && exitError 6
 		[[ $? != $ERROR_INVALID_HEADERS_DIR ]] && exitError
@@ -136,6 +149,12 @@ checkOotModule()
 
 test()
 {
+	# TODO: Deal with this workaround
+	if [[ $VM_TEST ]]; then
+		remoteSh sudo reboot
+		waitForSystemBootUp
+	fi
+
 	checkOotModule
 }
 

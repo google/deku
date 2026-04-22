@@ -16,7 +16,7 @@ modifyFile()
 	local function=$2
 	local extra=$3
 	local text="[$SCRIPT_NAME] DEKU $function test$extra"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	git -C "$srcDir" restore $file 2>&1 > /dev/null
 	local funcName=__func__
@@ -47,7 +47,7 @@ containsNumberOfModulesAndPatches()
 test()
 {
 	local cmd="CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com; CMD='cat /dev/uinput 2>/dev/null'; eval \$CMD; eval sudo \$CMD; sleep 0.1"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	prepareKernelAndDeploy $KERNEL_VER +CONFIG_INPUT_UINPUT
 	runQemu
@@ -317,6 +317,7 @@ main()
 {
 	# TODO: Remove once ROX allocations for livepatch will be fixed
 	[[ $KERNEL_VER == "origin/master" ]] && return;
+	[[ $ANDROID ]] && return
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		:

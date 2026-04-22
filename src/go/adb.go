@@ -8,7 +8,7 @@ import (
 	"os/exec"
 )
 
-func ADBExecuteCommand(command string) ([]byte, error) {
+func ADBExecuteCommandWithConfig(command string, config Config) ([]byte, error) {
 	cmd := exec.Command("adb")
 	if config.deployParams != "" {
 		cmd.Args = append(cmd.Args, "-s", config.deployParams)
@@ -24,6 +24,10 @@ func ADBExecuteCommand(command string) ([]byte, error) {
 	}
 
 	return out, err
+}
+
+func ADBExecuteCommand(command string) ([]byte, error) {
+	return ADBExecuteCommandWithConfig(command, config)
 }
 
 func ADBUploadFiles(files []string) ([]byte, error) {

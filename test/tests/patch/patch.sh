@@ -14,7 +14,7 @@ test()
 	local file="net/ipv4/tcp_output.c"
 	local function="tcp_syn_options"
 	local text="[$SCRIPT_NAME] DEKU patch $function test"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local patchesDir=/tmp/deku_patches
 	local localPatchesDir="$patchesDir"
 
@@ -22,6 +22,9 @@ test()
 	local patchFile="$patchesDir/deku_patch.diff"
 	local localPatchFile="$localPatchesDir/deku_patch.diff"
 
+	local downloadCmd="curl --silent --head unknown.com 2>&1 > /dev/null; curl --silent --head google.com 2>&1 > /dev/null; curl --silent --head google.eu 2>&1 > /dev/null; curl --silent --head bing.com 2>&1 > /dev/null;"
+	downloadCmd+="wget --quiet --spider unknown.com 2>&1 > /dev/null; wget --quiet --spider google.com 2>&1 > /dev/null; wget --quiet --spider google.eu 2>&1 > /dev/null; wget --quiet --spider bing.com 2>&1 > /dev/null;"
+		
 	rm -rf $patchesDir
 	mkdir -p $patchesDir
 
@@ -43,7 +46,7 @@ test()
 
 	dekuDeploy -p "$localPatchFile" || exitError 7
 	clearLogs
-	remoteSh "wget -q --spider google.com"
+	remoteSh "$downloadCmd"
 	checkIfDmesgContains "$text" || exitError 8
 
 	# make sure that the kernel sources dir isn't patched
@@ -53,7 +56,7 @@ test()
 	logStep "Test cleanup"
 	dekuDeploy || exitError 11
 	clearLogs
-	remoteSh "wget -q --spider google.com"
+	remoteSh "$downloadCmd"
 	checkIfDmesgNOTContains "$text" || exitError 12
 	[[ -d "$WORKDIR/patched_sources" ]] && exitError 13
 
@@ -65,9 +68,10 @@ test()
 	appendBeforeFunction "$srcDir/include/net/arp.h" __ipv4_confirm_neigh "extern int _deku_var_test;"
 	git -C "$srcDir" diff -- $FILES ':(exclude)*.config' > "$patchFile"
 	revertChanges
+	if [[ ! $ANDROID ]]; then
 	dekuDeploy -p "$localPatchFile" || { echo "err:$?";  exitError 14; }
 	clearLogs
-	remoteSh "ip -s -s neigh flush all; wget -q --spider google.com"
+	remoteSh "ip -s -s neigh flush all; $downloadCmd"
 	checkIfDmesgContains "${text}_1" || exitError 15
 	checkIfDmesgContains "eth_type_trans_1" || exitError 16
 
@@ -91,7 +95,7 @@ test()
 			   -p "$localPatchesDir/p3.diff" \
 			   -p "$localPatchesDir/p4.diff" || exitError 17
 	clearLogs
-	remoteSh "ip -s -s neigh flush all; wget -q --spider google.com"
+	remoteSh "ip -s -s neigh flush all; $downloadCmd"
 	checkIfDmesgContains "${text}_2" || exitError 18
 	checkIfDmesgContains "eth_type_trans_2" || exitError 19
 	checkIfDmesgNOTContains "${text}_1" || exitError 20
@@ -102,14 +106,15 @@ test()
 	sed -i "s/DEKU patch tcp_syn_options test_2/DEKU patch tcp_syn_options test_3/g" $patchesDir/p*.diff
 	dekuDeploy -p $localPatchesDir/*.diff || exitError 22
 	clearLogs
-	remoteSh "ip -s -s neigh flush all; wget -q --spider google.com"
+	remoteSh "ip -s -s neigh flush all; $downloadCmd"
 	checkIfDmesgContains "${text}_3" || exitError 23
 	checkIfDmesgContains "eth_type_trans_3" || exitError 24
 	checkIfDmesgNOTContains "${text}_2" || exitError 25
 	checkIfDmesgNOTContains "eth_type_trans_2" || exitError 26
+	fi
 
 	logStep "Test broken patch"
-	sed -i "s/eth_type_trans/ethX_type_trans/g" $patchesDir/p*.diff
+	sed -i "s/eth_type_trans/ethX_type_trans/g" $patchesDir/*.diff
 	out=$(dekuDeploy --stdout -p $localPatchesDir/*.diff) && exitError 27
 	grep -q "Failed to apply patch" <<< "$out" || exitError 28
 

@@ -9,10 +9,17 @@ FILES="fs/open.c"
 DESCRIPTION="BUG()"
 . test/common.sh
 
+testExit()
+{
+	remoteSh reboot
+	waitForSystemBootUp
+	exitError $1
+}
+
 check()
 {
 	local text="$1"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	logStep "Clear from previous test"
 	revertChanges
@@ -24,35 +31,36 @@ check()
 	sleep 1
 
 	if [[ $text == *"BUG"* ]]; then
-		checkIfDmesgNOTContains "] kernel BUG at fs/open.c" || exitError 3
+		checkIfDmesgNOTContains "] kernel BUG at fs/open.c" || testExit 3
 	fi
 
 	if [[ $text == *"WARN"* ]]; then
-		checkIfDmesgNOTContains "] WARNING: CPU: " || exitError 4
+		checkIfDmesgNOTContains "] WARNING: CPU: " || testExit 4
 	fi
-	checkIfDmesgNOTContains "Comm: chmod Tainted" || exitError 5
+	checkIfDmesgNOTContains "Comm: chmod Tainted" || testExit 5
 
 	logStep "Check "$text
 	appendToFunction "$srcDir/fs/open.c" "chmod_common" "$text"
 
 	clearLogs
-	dekuDeploy || exitError 6
+	dekuDeploy || testExit 6
 	sleep 1
 	remoteSh "rm -f /tmp/a; touch /tmp/a; chmod 644 /tmp/a"
 	sleep 1
 
 	if [[ $text == *"BUG"* ]]; then
-		checkIfDmesgContains "] kernel BUG at fs/open.c" || exitError 7
+		checkIfDmesgContains "] kernel BUG at fs/open.c" || testExit 7
 	fi
 
 	if [[ $text == *"WARN"* ]]; then
-		checkIfDmesgContains "] WARNING: CPU: " || exitError 8
+		checkIfDmesgContains "] WARNING: CPU: " || testExit 8
 	fi
 }
 
 test()
 {
-	remoteSh "CMD='sysctl -w kernel.panic_on_oops=0 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD;"
+	[[ $ANDROID ]] && return
+	[[ $VM_TEST ]] && remoteSh "sudo sysctl -w kernel.panic_on_oops=0" || remoteSh "sysctl -w kernel.panic_on_oops=0"
 
 	if [[ $VM_TEST == "" && $LOCAL_TEST == ""  ]]; then
 		check "BUG();"
@@ -64,6 +72,9 @@ test()
 	check "WARN_ON_ONCE(1);"
 
 	check "__WARN();WARN(1, \"test\");WARN_ON(1);WARN_ON_ONCE(1);"
+
+	remoteSh reboot
+	waitForSystemBootUp
 }
 
 main()

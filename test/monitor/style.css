@@ -131,3 +131,16 @@ table {
 
 .testStatusSuccess {
 }
+
+.agentStatusText {
+  white-space: nowrap
+}
+
+.reRunLastTest{
+  content: url('rerun.png');
+  margin: 0;
+  padding: 0;
+  height: 8pt;
+  margin-left: 10pt;
+  cursor: pointer;
+}

@@ -102,7 +102,7 @@ test()
 	local file="net/ipv4/tcp_ipv4.c"
 	local function="tcp_v4_connect"
 	local cmd="wget -q --spider google.com; wget -q --spider example.com"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	local expectedmsg=
 	local altExpecteDmsg=
@@ -165,6 +165,7 @@ main()
 	FunctionCode="${FunctionCode//$'\n'/ }"
 	FunctionCodeReadMostly="${FunctionCodeReadMostly//$'\n'/ }"
 
+	[[ $ANDROID ]] && return
 	if [[ $LOCAL_TEST != "" ]]; then
 		:
 	else

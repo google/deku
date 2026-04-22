@@ -14,7 +14,7 @@ inlineTest()
 	local kernelVer=$1
 	local file=$2
 	local functions=$3
-	local srcDir=$(sourceDir $kernelVer)
+	local srcDir=$SOURCE_DIR
 
 	for function in ${functions//,/ }
 	do

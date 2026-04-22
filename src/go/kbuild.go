@@ -184,7 +184,7 @@ func buildFile(srcFile, compileFile, outFile string) error {
 		compileFile = filepath.Join(currentPath, compileFile)
 	}
 
-	if config.androidKernelDir != "" {
+	if config.androidKernelDir != "" && !strings.HasPrefix(cmd[0], "/") {
 		cmd[0] = config.llvm + cmd[0]
 	}
 

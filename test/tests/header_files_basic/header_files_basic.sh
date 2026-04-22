@@ -604,13 +604,51 @@ expectedPatches_ubuntu_6_14=(
 	"patch_38e9af8b_hid_corsair_void"
 )
 
+expectedPatches_android_6_12=(
+	"patch_025c09a4_hid_prodikeys"
+	"patch_15286137_hid_uclogic_core"
+	"patch_1594733e_hid_roccat_kovaplus"
+	"patch_2acf7fde_hid_roccat_kone"
+	"patch_2f40cdee_hid_microsoft"
+	"patch_3206bd8b_hid_roccat_lua"
+	"patch_359d05e2_hid_lg_g15"
+	"patch_3f58b910_hid_magicmouse"
+	"patch_41a1f608_hid_roccat_ryos"
+	"patch_41e1d08e_hid_logitech_dj"
+	"patch_4e857db3_hid_roccat_koneplus"
+	"patch_567f23f1_hid_plantronics"
+	"patch_7723636b_hid_elecom"
+	"patch_858f5e18_hid_lg"
+	"patch_85afc72e_hid_apple"
+	"patch_86e1e138_hid_wiimote_core"
+	"patch_8b1ef52d_hid_roccat_arvo"
+	"patch_9a3bc6b9_hid_nintendo"
+	"patch_9d590815_hid_playstation"
+	"patch_a6096f3b_hid_roccat_konepure"
+	"patch_b1b8af5f_hid_roccat_pyra"
+	"patch_ba069948_hid_steam"
+	"patch_bf5f5191_hid_multitouch"
+	"patch_bf693bf0_hid_input"
+	"patch_c5bc4f7f_hid_picolcd_core"
+	"patch_ce0ce2c3_hid_quirks"
+	"patch_d4dd7fa8_hid_core"
+	"patch_d84909f5_hid_logitech_hidpp"
+	"patch_d8f8cf00_hid_sony"
+	"patch_e9eff714_hid_roccat_isku"
+	"patch_f3f19d49_hid_roccat_savu"
+	"patch_f6db7015_hid_uclogic_params"
+)
+
 test()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	local expectedPatches=
 
-	if [[ "$KERNEL_VER" == "v5.10" ]]; then
+	if [[ $ANDROID ]]; then
+		expectedPatches="${expectedPatches_android_6_12[@]}"
+
+	elif [[ "$KERNEL_VER" == "v5.10" ]]; then
 		expectedPatches="${expectedPatches_cros_5_10[@]}"
 	elif [[ "$KERNEL_VER" == "v5.15" ]]; then
 		expectedPatches="${expectedPatches_cros_5_15[@]}"
@@ -649,8 +687,8 @@ test()
 
 	# start from fresh sources and kernel
 	prepareKernelAndDeploy $KERNEL_VER || exitError 2;
-	touch "$(buildDir $KERNEL_VERSION)/vmlinux"
-	touch "$(buildDir $KERNEL_VERSION)/Makefile"
+	touch "$BUILD_DIR/vmlinux"
+	touch "$BUILD_DIR/Makefile"
 
 	echo "" >> "$srcDir/drivers/hid/hid-ids.h"
 

@@ -22,7 +22,7 @@ test()
 	local function3="cmdline_proc_show"
 	local functionHeader3="static int cmdline_proc_show"
 
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	logStep "Make dependent changes..."
 	appendToFunction "$srcDir/$file1" $function1 "cursor_x = 1;\ncursor_y = 1;"

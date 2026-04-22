@@ -12,7 +12,7 @@ DESCRIPTION="Filter symbols"
 filterTest()
 {
 	local file="net/ipv4/tcp_ipv4.c"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local ofile="$WORKDIR/patch_e9fa88a1_tcp_ipv4/patch.o"
 
 	appendToFunction "$srcDir/$file" "tcp_req_err" "printk(KERN_INFO \"[$SCRIPT_NAME] DEKU tcp_req_err test\");"
@@ -58,6 +58,10 @@ filterTest()
 		# 	grep "A close jump to a neighboring function with a jump of less than 4 bytes was detected (tcp_req_err -> reqsk_put)" <<< "$out" || { logErr "Fail"; exit 2; }
 		# 	grep "The non-traceable function reqsk_put is (in)directly called from traceable function tcp_req_err" <<< "$out" || { logErr "Fail"; exit 3; }
 		# fi
+	elif [[ $ANDROID ]]; then
+		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
+		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" && exitError
+		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" && exitError
 	elif [[ $KERNEL_VER == v6.8 ]]; then
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" | grep -q "contains 2 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
@@ -66,7 +70,11 @@ filterTest()
 		# readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" | grep -q "contains 2 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
-		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" | grep -q "contains 5 entries:" || exitError
+		if [[ $VM_TEST$ANDROID ]]; then
+			readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" | grep -q "contains 5 entries:" || exitError
+		else
+			readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" && exitError
+		fi
 	elif [[ $KERNEL_VERSION == v6.1.* ]]; then
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError

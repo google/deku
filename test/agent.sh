@@ -98,7 +98,7 @@ waitForJob()
 
 			# measure execution time of run.sh
 			start=$(date +%s%N)
-			./test/run.sh $params --continue
+			./test/run.sh $params
 			rc=$?
 			end=$(date +%s%N)
 			runtime=$(( (end - start) / 1000000000 ))

@@ -18,7 +18,7 @@ checkRelocations()
 	local srcfile=$2
 	local fun=$3
 	local text=$4
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	local tmpreloc=/tmp/reloc-$KERNEL_VER
 	local origin="test/tests/relocation/$kernVer/$(filenameNoExt $srcfile)"
@@ -46,6 +46,8 @@ test()
 		dir="cros_$KERNEL_VER"
 	elif [[ $VM_TEST ]]; then
 		dir="vm_$KERNEL_VER"
+	elif [[ $ANDROID ]]; then
+		dir="android_$KERNEL_VER"
 	else
 		dir="qemu_${KERNEL_VER%.*}"
 	fi

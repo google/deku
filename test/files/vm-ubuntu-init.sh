@@ -3,6 +3,7 @@
 # Project: DEKU
 # URL: https://github.com/MarekMaslanka/deku
 
+mkdir ~/linux-trees
 sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=104857600 Public-mmaslanka ~/linux-trees/
 git config --global user.email "you@example.com"
 git config --global user.name "Your Name"

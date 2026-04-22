@@ -173,7 +173,9 @@ waitForSystemBootUp()
 			fi
 		elif [[ $CHROMEOS != "" ]]; then
 			[ $(expr $i % 15) == 0 ] && logInfo "Waiting for DUT..."
-			ssh -i /mnt/host/source/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 -q exit
+			ssh -i /mnt/host/source/chromite/ssh_keys/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 -q exit
+		elif [[ $ANDROID ]]; then
+			adb -s "${DEPLOY_PARAMS#*@*}" wait-for-device
 		else
 			[ $(expr $i % 15) == 0 ] && logInfo "Waiting for QEMU..."
 			timeout --signal=SIGKILL 10 ssh root@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=1 -q "rm -rf /var/log; exit"
@@ -185,12 +187,12 @@ waitForSystemBootUp()
 
 	return 1
 }
+export -f waitForSystemBootUp
 
 runQemu()
 {
 	local kernelVer=$1
 	local buildDir=$BUILD_DIR
-	[[ $kernelVer != "" ]] && buildDir=$(buildDir $kernelVer)
 	local KERNEL_IMAGE="$buildDir/arch/x86/boot/bzImage"
 	local cmdline="console=ttyS0 root=/dev/sda rw"
 	local extraparams=
@@ -209,7 +211,9 @@ runQemu()
 	elif [[ $VM_TEST != "" ]]; then
 		timeout --signal=SIGKILL 5 ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "true"
 		if [[ $? == 0 ]]; then
-			ssh test@localhost -p $SSH_PORT $SSHPARAMS -o ConnectTimeout=3 -q "sudo reboot"
+			isCurrentKernelDeployed || remoteSh "sudo reboot"
+			waitForSystemBootUp
+			isCurrentKernelDeployed || remoteSh "sudo ./update_grub.sh test; sudo reboot"
 			waitForSystemBootUp && return
 		fi
 
@@ -230,49 +234,50 @@ runQemu()
 		remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1
 		waitForSystemBootUp || { logErr "Chromebook didn't bootup"; return 1; }
 		return
-	fi
+	elif [[ $ANDROID ]]; then # TODO
+		return
+	else
+		if [[ $ARM64 != "" ]]; then
+			KERNEL_IMAGE="$buildDir/arch/arm64/boot/Image"
+			cmdline="console=ttyAMA0 root=/dev/vda rw"
+			extraparams="-M virt -cpu cortex-a72"
+			qemuexec="qemu-system-aarch64"
+		fi
 
-	[[ "$TEST_ON_CHROMEBOOK" ]] && return
+		if [[ ! -f "$ROOTFS_IMG" ]]; then
+			logInfo "Rootfs image is not found. Go to 'test' directory and run 'sudo ./mkrootfs.sh' to generate image."
+			exit 1
+		fi
+		local logFile=$(logFile qemu)
+		# TODO: Check if another qemu instance is not running
+		fuser -k -n tcp $SSH_PORT
+		local enablekvm="-enable-kvm"
+		timeout 0.5 $qemuexec -nographic -enable-kvm > /dev/null 2>&1
+		[[ $? == 1 ]] && enablekvm=
 
-	if [[ $ARM64 != "" ]]; then
-		KERNEL_IMAGE="$buildDir/arch/arm64/boot/Image"
-		cmdline="console=ttyAMA0 root=/dev/vda rw"
-		extraparams="-M virt -cpu cortex-a72"
-		qemuexec="qemu-system-aarch64"
-	fi
-
-	if [[ ! -f "$ROOTFS_IMG" ]]; then
-		logInfo "Rootfs image is not found. Go to 'test' directory and run 'sudo ./mkrootfs.sh' to generate image."
-		exit 1
-	fi
-	local logFile=$(logFile qemu)
-	# TODO: Check if another qemu instance is not running
-	fuser -k -n tcp $SSH_PORT
-	local enablekvm="-enable-kvm"
-	timeout 0.5 $qemuexec -nographic -enable-kvm > /dev/null 2>&1
-	[[ $? == 1 ]] && enablekvm=
-
-	for x in {1..3}; do
-		# Wait a bit of time before start next instance of qemu
-		sleep 0.5
-		while true; do
-			ps aux | grep "$SSH_PORT" | grep -q "qemu" && lsof -i:"$SSH_PORT" -Fp | grep -oP "p\K.*" | xargs kill -9
-			sleep 0.2
-			ps aux | grep "$SSH_PORT" | grep -q "qemu" && \
-				logDebug "Waiting for close previous qemu instance" || break
-			sleep 0.8
+		for x in {1..3}; do
+			# Wait a bit of time before start next instance of qemu
+			sleep 0.5
+			while true; do
+				ps aux | grep "$SSH_PORT" | grep -q "qemu" && lsof -i:"$SSH_PORT" -Fp | grep -oP "p\K.*" | xargs kill -9
+				sleep 0.2
+				ps aux | grep "$SSH_PORT" | grep -q "qemu" && \
+					logDebug "Waiting for close previous qemu instance" || break
+				sleep 0.8
+			done
+			logInfo "Starting QEMU..."
+			$qemuexec -kernel "$KERNEL_IMAGE" \
+					  -drive ${diskParam}format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
+					  -append "$cmdline" -serial file:$logFile -smp 4 -m 256 \
+					  -device virtio-net-pci,netdev=net0,romfile="" \
+					  -vnc none -netdev type=user,id=net0 \
+					  -nic "user,hostfwd=tcp::$SSH_PORT-:22" \
+					  -daemonize $enablekvm $extraparams
+			QEMU_PID=$!
+			waitForSystemBootUp && return
+			logInfo "Seems that QEMU hung on launching. Restarting..."
 		done
-		logInfo "Starting QEMU..."
-		$qemuexec -kernel "$KERNEL_IMAGE" -drive ${diskParam}format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
-				-append "$cmdline" -serial file:$logFile -smp 4 -m 256 \
-				-device virtio-net-pci,netdev=net0,romfile="" \
-				-vnc none -netdev type=user,id=net0 \
-				-nic "user,hostfwd=tcp::$SSH_PORT-:22" \
-				-daemonize $enablekvm $extraparams
-		QEMU_PID=$!
-		waitForSystemBootUp && return
-		logInfo "Seems that QEMU hung on launching. Restarting..."
-	done
+	fi
 }
 export -f runQemu
 
@@ -284,9 +289,11 @@ remoteSh()
 		local cmd="$@"
 		REMOTE_OUT=$(bash -c "$cmd")
 	elif [[ $CHROMEOS != "" ]]; then
-		REMOTE_OUT=$(ssh -i /mnt/host/source/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=error "$@")
+		REMOTE_OUT=$(ssh -i /mnt/host/source/chromite/ssh_keys/testing_rsa -p $CROS_SSH_PORT root@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=error "$@")
 	elif [[ $VM_TEST != "" ]]; then
 		REMOTE_OUT=$(ssh test@localhost -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
+	elif [[ $ANDROID ]]; then
+		REMOTE_OUT=$(adb -s ${DEPLOY_PARAMS#*@*} shell "su 0 $@")
 	else
 		REMOTE_OUT=$(ssh root@localhost -o LogLevel=error -p $SSH_PORT $SSHPARAMS "$@")
 	fi
@@ -316,6 +323,9 @@ runCmd()
 		return ${PIPESTATUS[0]}
 	elif [[ $VM_TEST != "" ]]; then
 		remoteShOut "cd deku; $@"
+	elif [[ $ANDROID ]]; then
+		$@ | tee -a $LOG_FILE
+		return ${PIPESTATUS[0]}
 	else
 		docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest $@ | tee -a $LOG_FILE
 		return ${PIPESTATUS[0]}
@@ -327,9 +337,11 @@ copyToRemote()
 	if [[ $LOCAL_TEST != "" ]]; then
 		REMOTE_OUT=$(cp "$1" "$2")
 	elif [[ $CHROMEOS != "" ]]; then
-		REMOTE_OUT=$(scp -r -i /mnt/host/source/testing_rsa -P $CROS_SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$1" root@localhost:"$2")
+		REMOTE_OUT=$(scp -r -i /mnt/host/source/chromite/ssh_keys/testing_rsa -P $CROS_SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$1" root@localhost:"$2")
 	elif [[ $VM_TEST != "" ]]; then
 		REMOTE_OUT=$(cp -rf "$1" "/tmp/deku-vm-mount/$2")
+	elif [[ $ANDROID ]]; then
+		REMOTE_OUT=$(adb -s "${DEPLOY_PARAMS#*@*}" push "$1" "$2")
 	else
 		REMOTE_OUT=$(scp -r -P $SSH_PORT $SSHPARAMS "$1" root@localhost:"$2")
 	fi
@@ -362,6 +374,8 @@ sourceDir()
 		readlink "$builddir/source"
 	elif [[ $VM_TEST != "" ]]; then
 		echo $SOURCE_DIR
+	elif [[ $ANDROID ]]; then
+		echo "$ANDROID_KERNEL_DIR/common/"
 	elif [[ $ARM64 != "" ]]; then
 		echo "$KERNELS_DIR/arch64"
 	else
@@ -387,11 +401,16 @@ buildDir()
 		kerndir=${kerndir%-9999*}
 		local builddir="$basedir/build/${CROS_BOARD}/var/cache/portage/sys-kernel/$kerndir"
 		echo "$builddir"
-	elif [[ $VM_TEST != "" ]]; then
+	elif [[ $VM_TEST ]]; then
 		echo $BUILD_DIR
+	elif [[ $ANDROID ]]; then
+		for file in $ANDROID_KERNEL_DIR/out/bazel/output_user_root/*/sandbox/linux-sandbox/*/execroot/_main/out/*/common/vmlinux.o; do
+			local dir=$(dirname $file)
+			local verFile="$dir/include/generated/utsversion.h"
+			grep -qv "Thu Jan  1 00:00:00 UTC 1970" $verFile && grep -qv "1970-01-01T00:00:00Z" $verFile && echo $dir && return
+		done
 	else
-		local srcDir=$(sourceDir $kernelVersion)
-		echo ${srcDir%/*}/build-${srcDir##*/}
+		echo ${SOURCE_DIR%/*}/build-${SOURCE_DIR##*/}
 	fi
 }
 export -f buildDir
@@ -399,7 +418,7 @@ export -f buildDir
 prepareKernelSources()
 {
 	local kernelVersion=$1
-	local srcDir=$(sourceDir $kernelVersion)
+	local srcDir=$SOURCE_DIR
 
 	[[ "$TEST_ON_CHROMEBOOK" || "$CHROMEOS" || "$LOCAL_TEST" ]] && return
 
@@ -408,6 +427,8 @@ prepareKernelSources()
 		return
 	elif [[ $ARM64 != "" ]]; then
 		git clone https://github.com/madvenka786/linux.git "$srcDir"
+	elif [[ $ANDROID ]]; then # TODO
+		return
 	else
 		# git clone git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git "$SOURCE_DIR"
 		# versionShort=
@@ -533,8 +554,9 @@ export -f checkIfFileExists
 
 markKernelAsDirty()
 {
+	[[ $ANDROID ]] && return # TODO
 	logInfo "Marking kernel as dirty"
-	rm -f $(buildDir $KERNEL_VERSION)/include/generated/compile.h
+	rm -f $BUILD_DIR/include/generated/compile.h
 }
 export -f markKernelAsDirty
 
@@ -562,30 +584,55 @@ getModifiedTestFiles()
 
 isKernelBuildClean()
 {
-	[[ -f $(buildDir $KERNEL_VERSION)/include/generated/compile.h ]] || logInfo "Kernel build is not clean, compile.h is not found"
-	[[ -f $(buildDir $KERNEL_VERSION)/include/generated/compile.h ]] || return 1
-	grep -q "DEKU_TEST_HOST_DIRTY" $(buildDir $KERNEL_VERSION)/include/generated/compile.h && logInfo "Kernel build is dirty, contains DEKU_TEST_HOST_DIRTY"
-	grep -q "DEKU_TEST_HOST_DIRTY" $(buildDir $KERNEL_VERSION)/include/generated/compile.h && return 1
+	[[ -f $BUILD_DIR/include/generated/compile.h ]] || logInfo "Kernel build is not clean, compile.h is not found"
+	[[ -f $BUILD_DIR/include/generated/compile.h ]] || return 1
+	grep -q "DEKU_TEST_HOST_DIRTY" $BUILD_DIR/include/generated/compile.h && logInfo "Kernel build is dirty, contains DEKU_TEST_HOST_DIRTY"
+	grep -q "DEKU_TEST_HOST_DIRTY" $BUILD_DIR/include/generated/compile.h && return 1
 	local ver=${KERNEL_VERSION//v/}
 	ver=${ver//-rc/.0-rc}
-	grep -q "\"$ver" $(buildDir $KERNEL_VERSION)/include/generated/utsrelease.h || logInfo "Kernel build is not clean, version mismatch"
-	grep -q "\"$ver" $(buildDir $KERNEL_VERSION)/include/generated/utsrelease.h || return 1
+	grep -q "\"$ver" $BUILD_DIR/include/generated/utsrelease.h || logInfo "Kernel build is not clean, version mismatch"
+	grep -q "\"$ver" $BUILD_DIR/include/generated/utsrelease.h || return 1
 	return 0
 }
 export -f isKernelBuildClean
 
+isCurrentKernelDeployed()
+{
+	local utsRelease=$(remoteShOut "uname -r")
+	local utsVersion=$(remoteShOut "uname -v")
+	grep -qrF "$utsRelease" $BUILD_DIR/include/generated/ && grep -qrF "$utsVersion" $BUILD_DIR/include/generated/ || return 1
+
+	if [[ $CHROMEOS ]]; then
+		utsRelease=${utsRelease%.*}
+		utsRelease=${utsRelease/./_}
+		local utsReleaseIsOk=
+		[[ $utsRelease == $CURRENT_CROS_KERNEL_VERSION ]] && return 0
+	else
+		utsRelease=${utsRelease/+/}
+		utsRelease=${utsRelease/-dirty/}
+		# remove "-gff37d9449b65" from utsRelease "6.15.0-rc7-gff37d9449b65"
+		utsRelease=${utsRelease%-*}
+		utsRelease=${utsRelease//.0-rc/-rc}
+		local utsReleaseIsOk=
+		[[ v$utsRelease == $KERNEL_VERSION || v$utsRelease == $KERNEL_VERSION.* ]] && return 0
+	fi
+
+	return 1
+}
+export -f isCurrentKernelDeployed
+
 buildKernelToLaunch()
 {
-	local onlyBuild=
+	local onlyBuild=false
 	if [[ $1 == "--onlyBuild" ]]; then
-		onlyBuild=1
+		onlyBuild=true
 		shift
 	fi
 
 	local extraparams=$1
 	local logFile=$(logFile build)
-	local srcDir=$(sourceDir $KERNEL_VERSION)
-	local buildDir=$(buildDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
+	local buildDir=$BUILD_DIR
 	local modifiedSrcFiles=$(getModifiedTestFiles)
 
 	local exportBuildHost=
@@ -594,78 +641,63 @@ buildKernelToLaunch()
 
 	[[ $modifiedSrcFiles != "" ]] && exportBuildHost=DEKU_TEST_HOST_DIRTY
 
-	local kernelOnDevice=$(remoteShOut "uname -r")
-	kernelOnDevice=${kernelOnDevice/+/}
-	kernelOnDevice=${kernelOnDevice/-dirty/}
-	# remove "-gff37d9449b65" from kernelOnDevice "6.15.0-rc7-gff37d9449b65"
-	kernelOnDevice=${kernelOnDevice%-*}
-	kernelOnDevice=${kernelOnDevice//.0-rc/-rc}
-	local kernelOnDeviceIsOk=
-	[[ $onlyBuild || v$kernelOnDevice == $KERNEL_VERSION ]] && kernelOnDeviceIsOk=1
+	local skipDeployKernel=false
+	$onlyBuild || isCurrentKernelDeployed && skipDeployKernel=true
+	isKernelBuildClean || skipDeployKernel=false
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		return
 	elif [[ $CHROMEOS != "" ]]; then
-		local kernelOnDevice=$(remoteShOut "uname -r")
-		kernelOnDevice=${kernelOnDevice%.*}
-		kernelOnDevice=${kernelOnDevice/./_}
-		local kernelOnDeviceIsOk=
-		[[ $onlyBuild || $kernelOnDevice == $CURRENT_CROS_KERNEL_VERSION ]] && kernelOnDeviceIsOk=1
-		if isKernelBuildClean && [[ $modifiedSrcFiles == "" && $buildDir == *"chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION" && -e /build/brya/var/db/pkg/sys-kernel/chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION-9999 && $kernelOnDeviceIsOk == 1 ]]; then
-			[[ $onlyBuild ]] || remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1
-			logInfo "Kernel build artifacts are clean"
+		if $skipDeployKernel && [[ $modifiedSrcFiles == "" && $buildDir == *"chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION" && -e /build/brya/var/db/pkg/sys-kernel/chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION-9999 ]]; then
+			$onlyBuild || remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1
 			return
 		fi
 		logInfo "Building the kernel..."
 		remoteSh "touch test || { /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2; /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4; reboot; }" > /dev/null 2>&1 &
 		[[ $modifiedSrcFiles != "" ]] && sed -i "s/KBUILD_BUILD_HOST=chromium.org/KBUILD_BUILD_HOST=DEKU_TEST_HOST_DIRTY/g" /mnt/host/source/src/third_party/chromiumos-overlay/eclass/cros-kernel.eclass
-		USE="pcserial tty_console_ttyS0 livepatch" emerge-${CROS_BOARD} chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION > $logFile 2>&1 || return 1
+		USE="pcserial tty_console_ttyS0 livepatch" emerge-${CROS_BOARD} chromeos-kernel-$CURRENT_CROS_KERNEL_VERSION >> $logFile 2>&1 || return 1
 		git -C "/mnt/host/source/src/third_party/chromiumos-overlay/" restore eclass/cros-kernel.eclass
-		[[ $onlyBuild ]] && return 0
+		$onlyBuild && return 0
 		for i in $(seq 1 10); do
 			/mnt/host/source/src/scripts/update_kernel.sh --remote localhost --board=${CROS_BOARD} --clean --ssh_port $CROS_SSH_PORT >> $logFile 2>&1 && break
 			logInfo "Re-run update the kernel"
 		done
 		return 0
 	elif [[ $VM_TEST != "" ]]; then
-		# remoteShOut "cp -f /boot/config-\$(uname -r) linux-6.8.4/.config;" >> logFile 2>&1
-		# remoteShOut "make $extraparams -C linux-6.8.4 mrproper" >> $logFile 2>&1
-		# remoteShOut "yes '' | make $extraparams -C linux-6.8.4 oldconfig" >> $logFile 2>&1
-		isKernelBuildClean && [[ $modifiedSrcFiles == "" && $kernelOnDeviceIsOk == 1 ]] && { logInfo "Kernel build artifacts are clean"; return; }
+		$skipDeployKernel && [[ $modifiedSrcFiles == "" ]] && return;
 		logInfo "Building the kernel..."
+		#KBUILD_BUILD_TIMESTAMP=0 KBUILD_BUILD_VERSION=1 KDEB_PKGVERSION=1;
 		local cmd="
-find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;
-export KBUILD_BUILD_HOST=$exportBuildHost;
-make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
-ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
-	>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
-	exit 1;
-};"
-		if [[ $onlyBuild == "" ]]; then
+					find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;
+					export KBUILD_BUILD_HOST=$exportBuildHost;
+					make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
+					ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
+						>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
+						exit 1;
+					};"
+		if ! $onlyBuild; then
 			cmd+="
-sudo apt install -y --allow-downgrades ./linux-image-*_amd64.deb ./linux-headers-*_amd64.deb 2>&1;
-sudo ./update_grub.sh;
-sudo ./update_grub.sh test;
-"
+					sudo apt install -y --allow-downgrades ./linux-image-*_amd64.deb ./linux-headers-*_amd64.deb 2>&1;
+					sudo ./update_grub.sh;
+					sudo ./update_grub.sh test;
+				"
 		fi
-		remoteShOut "$cmd" > $logFile || { logErr "Fail to build kernel"; return 1; }
+		remoteShOut "$cmd" >> $logFile || { logErr "Fail to build kernel"; return 1; }
 		return
-	fi
-
-	if isKernelBuildClean && [[ $modifiedSrcFiles == "" && $kernelOnDeviceIsOk == 1 ]]; then
+	elif [[ $ANDROID ]]; then # TODO
 		return
+	else
+		$skipDeployKernel && [[ $modifiedSrcFiles == "" ]] && return
+		logInfo "Building the kernel..."
+		docker run --env KBUILD_BUILD_HOST=$exportBuildHost -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 	fi
-
-	logInfo "Building the kernel..."
-	docker run --env KBUILD_BUILD_HOST=$exportBuildHost -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 }
 export -f buildKernelToLaunch
 
 kernelConfigFile()
 {
 	if [[ $CHROMEOS ]]; then
-		local srcDir="$(sourceDir $KERNEL_VERSION)"
-		echo "$srcDir/chromeos/config/chromeos/x86_64/chromeos-intel-pineview.flavour.config"
+		echo "$SOURCE_DIR/chromeos/config/chromeos/x86_64/chromeos-intel-pineview.flavour.config"
 	else
 		echo "$BUILD_DIR/.config"
 	fi
@@ -677,8 +709,7 @@ enableKernelConfig()
 	local flag=$1
 	local action="--enable"
 	[[ $2 != "" ]] && action=$2
-	local srcDir="$(sourceDir $KERNEL_VERSION)"
-	"$srcDir/scripts/config" --file "$(kernelConfigFile)" $action $flag
+	"$SOURCE_DIR/scripts/config" --file "$(kernelConfigFile)" $action $flag
 }
 export -f enableKernelConfig
 
@@ -687,93 +718,86 @@ prepareKernel()
 	local version=$1
 	local usellvm=$2
 	local extraparams=
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local buildDir=$BUILD_DIR
-	[[ $version != "" ]] && buildDir=$(buildDir $KERNEL_VERSION)
 
-	if [[ $LOCAL_TEST != "" ]]; then
+	[[ "$TEST_ON_CHROMEBOOK" ]] && return
+
+	if [[ "$srcDir" == "" || ! -d "$srcDir" ]]; then
+		logErr "Can't find kernel sources dir $srcDir"
+		exit 1
+	fi
+
+	if [[ $LOCAL_TEST ]]; then
 		local kernelDir=$(getLocalKernelDir)
 		git -C $kernelDir reset --hard
 		return
-	elif [[ $CHROMEOS == "" ]]; then
-		[[ $ARM64 != "" ]] && version="orc_v3"
-
-		if [[ "$srcDir" == "" || ! -d "$srcDir" ]]; then
-			logErr "Can't find kernel sources dir $srcDir"
-			exit 1
-		fi
-
-		if [[ $VM_TEST != "" ]]; then
-			# remoteSh "git -C linux-6.8.4 reset --hard"
-			local tag=
-			if [[ $version == v6.11 ]]; then
-				tag="Ubuntu-hwe-6.11-6.11.0-17.17_24.04.2"
-			elif [[ $version == v6.14 ]]; then
-				tag="hwe-6.14-next"
-			else
-				tag="Ubuntu-6.8.0-49.49"
-			fi
-			srcDir="\$HOME/linux"
-			local currentTag=$(remoteShOut git -C $srcDir describe --exact-match --tags)
-			[[ "$currentTag" != "$tag" ]] && echo "Remove old linux dir" && remoteSh "rm -rf $srcDir; mkdir $srcDir"
-			# git worktree add ../v6.14 hwe-6.14-next
-			local cmd="
-if [ -z \"\$(ls -A $srcDir)\" ]; then
-	echo 'Prepare kernel from $tag...';
-	mkdir -p $srcDir;
-	time GIT_INDEX_FILE=/tmp/git.index git --git-dir=\$HOME/linux-trees/ubuntu/.git --work-tree=$srcDir restore --source=$tag -- . &&
-	cd $srcDir &&
-	time git init 2>/dev/null &&
-	time git add \"*\" >/dev/null &&
-	time git commit --no-verify -m 'Initial commit' >/dev/null &&
-	git tag $tag;
-else
-	cd $srcDir;
-	echo 'Reset kernel dir';
-	git clean -d -f > /dev/null;
-	git reset --hard > /dev/null;
-fi;
-cd $srcDir;
-make kernelversion;
-cp -v /boot/config-\$(uname -r) .config;
-yes '' | make oldconfig > /dev/null;
-scripts/config --disable DEBUG_INFO;
-scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT;
-scripts/config --disable DEBUG_INFO_DWARF4;
-scripts/config --disable DEBUG_INFO_DWARF5;
-scripts/config --enable DEBUG_INFO_NONE;
-scripts/config --disable SYSTEM_TRUSTED_KEYS;
-scripts/config --disable SYSTEM_REVOCATION_KEYS;
-scripts/config --set-str CONFIG_SYSTEM_TRUSTED_KEYS '';
-scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
-"
-			remoteShOut "$cmd" || { logErr "Fail to prepare kernel"; return 1; }
-
+	elif [[ $CHROMEOS ]]; then
+		:
+	elif [[ $VM_TEST ]]; then
+		# remoteSh "git -C linux-6.8.4 reset --hard"
+		local tag=
+		if [[ $version == v6.11 ]]; then
+			tag="Ubuntu-hwe-6.11-6.11.0-17.17_24.04.2"
+		elif [[ $version == v6.14 ]]; then
+			tag="hwe-6.14-next"
 		else
-			git -C "$srcDir" reset --hard > /dev/null 2>&1
-			git -C "$srcDir" clean -d -f > /dev/null 2>&1
-
+			tag="Ubuntu-6.8.0-49.49"
 		fi
+		srcDir="\$HOME/linux"
+		local currentTag=$(remoteShOut git -C $srcDir describe --exact-match --tags)
+		[[ "$currentTag" != "$tag" ]] && echo "Remove old linux dir" && remoteSh "rm -rf $srcDir; mkdir $srcDir"
+		# git worktree add ../v6.14 hwe-6.14-next
+		local cmd="
+					if [ -z \"\$(ls -A $srcDir)\" ]; then
+						echo 'Prepare kernel from $tag...';
+						mkdir -p $srcDir;
+						time GIT_INDEX_FILE=/tmp/git.index git --git-dir=\$HOME/linux-trees/ubuntu/.git --work-tree=$srcDir restore --source=$tag -- . &&
+						cd $srcDir &&
+						time git init 2>/dev/null &&
+						time git add \"*\" >/dev/null &&
+						time git commit --no-verify -m 'Initial commit' >/dev/null &&
+						git tag $tag;
+					else
+						cd $srcDir;
+						echo 'Reset kernel dir';
+						git clean -d -f > /dev/null;
+						git reset --hard > /dev/null;
+					fi;
+					cd $srcDir;
+					make kernelversion;
+					cp -v /boot/config-\$(uname -r) .config;
+					yes '' | make oldconfig > /dev/null;
+					scripts/config --disable DEBUG_INFO;
+					scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT;
+					scripts/config --disable DEBUG_INFO_DWARF4;
+					scripts/config --disable DEBUG_INFO_DWARF5;
+					scripts/config --enable DEBUG_INFO_NONE;
+					scripts/config --disable SYSTEM_TRUSTED_KEYS;
+					scripts/config --disable SYSTEM_REVOCATION_KEYS;
+					scripts/config --set-str CONFIG_SYSTEM_TRUSTED_KEYS '';
+					scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
+					"
+		remoteShOut "$cmd" || { logErr "Fail to prepare kernel"; return 1; }
+	elif [[ $ANDROID ]]; then # TODO
+		return
+	else
+		git -C "$srcDir" reset --hard > /dev/null 2>&1
+		git -C "$srcDir" clean -d -f > /dev/null 2>&1
 
-		[[ "$TEST_ON_CHROMEBOOK" ]] && return
-		if [[ $VM_TEST == "" ]]; then
-			git -C "$srcDir" reset --hard > /dev/null 2>&1
-			git -C "$srcDir" clean -d -f > /dev/null 2>&1
-
-			[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
-			docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" defconfig >/dev/null 2>&1
-			sed -i s/=m/=y/g "$buildDir/.config"
-			enableKernelConfig FRAME_POINTER_VALIDATION
-			enableKernelConfig FTRACE
-			enableKernelConfig KALLSYMS_ALL
-			enableKernelConfig FUNCTION_TRACER
-			enableKernelConfig LIVEPATCH
-			# enableKernelConfig DEBUG_INFO
-			# enableKernelConfig GDB_SCRIPTS
-			enableKernelConfig BT --module
-			docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" olddefconfig >/dev/null 2>&1
-			cp -f $(kernelConfigFile) /tmp/deku_test_config.backup
-		fi
+		[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
+		docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" defconfig >/dev/null 2>&1
+		sed -i s/=m/=y/g "$buildDir/.config"
+		enableKernelConfig FRAME_POINTER_VALIDATION
+		enableKernelConfig FTRACE
+		enableKernelConfig KALLSYMS_ALL
+		enableKernelConfig FUNCTION_TRACER
+		enableKernelConfig LIVEPATCH
+		# enableKernelConfig DEBUG_INFO
+		# enableKernelConfig GDB_SCRIPTS
+		enableKernelConfig BT --module
+		docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" olddefconfig >/dev/null 2>&1
+		cp -f $(kernelConfigFile) /tmp/deku_test_config.backup
 	fi
 
 	shift 1
@@ -914,6 +938,13 @@ dekuBuild()
 					 --builddir=../linux \
 					 $@ \
 					 livepatch 2>&1")
+	elif [[ $ANDROID ]]; then
+		out=$(./deku --workdir="$WORKDIR" \
+					 --android_kernel $ANDROID_KERNEL_DIR \
+					 --board brya \
+					 $builddir \
+					 $@ \
+					 livepatch 2>&1)
 	else
 		out=$(docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest \
 			./deku --workdir="$WORKDIR" \
@@ -933,45 +964,51 @@ dekuDeploy()
 {
 	local logFile=$(logFile)
 	local out=
-	local printOut=
 	local builddir=
-	if [[ $1 == "--stdout" ]]; then
-		printOut=1
-		shift
-	fi
+	local printOut=
+	local buildDirIsSet=
+	local args=("$@")
 
-	# iterate over parameters and check if any parameter is "-b" or "--builddir" set the builddir from the next parameter
 	for (( i=0; i < "$#"; i++ )); do
-		if [[ ${!i} == "-b" || ${!i} == "--builddir" ]]; then
-			local nextIdx=$(($i+1))
-			builddir=${!nextIdx}
+		if [[ ${args[$i]} == "-b" || ${args[$i]} == "--builddir" ]]; then
+			buildDirIsSet=1
+		elif [[ ${args[$i]} == "--stdout" ]]; then
+			unset args[$(($i))]
+			printOut=1
 		fi
 	done
 
 	if [[ $LOCAL_TEST != "" ]]; then
 		local kernelDir=$(getLocalKernelDir)
-		[[ $builddir == "" ]] && builddir=$kernelDir
+		[[ ! $buildDirIsSet ]] && builddir="--builddir=$kernelDir"
 		out=$(./deku --workdir="$WORKDIR" \
-					 --builddir=$builddir \
-					 $@ 2>&1)
+					 $builddir \
+					 ${args[@]} 2>&1)
 	elif [[ "${TEST_ON_CHROMEBOOK}" != "" || "${CHROMEOS}" != "" ]]; then
-		[[ $builddir != "" ]] && builddir="--builddir=$builddir"
+		logInfo "(./deku --workdir=\"$WORKDIR\" \
+					 --target=\"$DEPLOY_PARAMS\" \
+					 ${args[@]} 2>&1)"
 		out=$(./deku --workdir="$WORKDIR" \
 					 --target="$DEPLOY_PARAMS" \
-					 $builddir \
-					 $@ 2>&1)
+					 ${args[@]} 2>&1)
 	elif [[ $VM_TEST != "" ]]; then
-		[[ $builddir == "" ]] && builddir="../linux"
+		[[ ! $buildDirIsSet ]] && builddir="--builddir=../linux"
 		out=$(remoteShOut "cd deku; ./deku --workdir=workdir_test \
-					 --builddir=$builddir \
-					 $@" 2>&1)
+					 $builddir \
+					 ${args[@]}" 2>&1)
+	elif [[ $ANDROID ]]; then
+		[[ ! $buildDirIsSet ]] && builddir="--android_kernel $ANDROID_KERNEL_DIR"
+		out=$(./deku --workdir="$WORKDIR" \
+					 --target="${DEPLOY_PARAMS#*@*}" \
+					 $builddir \
+					 ${args[@]} 2>&1)
 	else
-		[[ $builddir == "" ]] && builddir="/kernel/${BUILD_DIR##*/}"
+		[[ ! $buildDirIsSet ]] && builddir="--builddir=/kernel/${BUILD_DIR##*/}"
 		out=$(docker run -t --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest \
 			./deku --workdir="$WORKDIR" \
-				   --builddir="$builddir" \
 			   	   --target="$DEPLOY_PARAMS" --ssh_options="${SSHPARAMS}" \
-				   $@ 2>&1)
+				   $builddir \
+				   ${args[@]} 2>&1)
 	fi
 
 	res=$?
@@ -983,7 +1020,7 @@ export -f dekuDeploy
 
 revertChanges()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	git -C "$srcDir" restore $(git -C "$srcDir" ls-files $FILES 2>/dev/null | xargs)
 
@@ -1033,11 +1070,13 @@ exportVars()
 		PREFIX=CROS
 	elif [[ $VM_TEST ]]; then
 		PREFIX=VM
+	elif [[ $ANDROID ]]; then
+		PREFIX=ANDROID
 	fi
 
 	local L_SSH_PORT=${PREFIX}_SSH_PORT
-	local SOURCE_DIR=${PREFIX}_SOURCE_DIR
-	local BUILD_DIR=${PREFIX}_BUILD_DIR
+	local L_SOURCE_DIR=${PREFIX}_SOURCE_DIR
+	local L_BUILD_DIR=${PREFIX}_BUILD_DIR
 	local SSH_KEY=${PREFIX}_SSH_KEY
 
  	L_SSH_PORT=${!L_SSH_PORT}
@@ -1047,10 +1086,8 @@ exportVars()
 
 	SSH_KEY="${!SSH_KEY}"
 
-	declare -g SSHPARAMS="${SSHPARAMS_OPTIONS} -o IdentityFile=$SSH_KEY"
-	declare -g DEPLOY_PARAMS="root@localhost:${L_SSH_PORT}"
-
-	declare -g LOG_FILE=$(logFile)
+	export SSHPARAMS="${SSHPARAMS_OPTIONS} -o IdentityFile=$SSH_KEY"
+	export DEPLOY_PARAMS="root@localhost:${L_SSH_PORT}"
 
 	export WORKDIR="workdir_$TEST_ID"
 	if [[ $VM_TEST ]]; then
@@ -1058,15 +1095,17 @@ exportVars()
 	fi
 
 	local kernelVer=$1
-	if [[ $kernelVer != "" ]]; then
-		SOURCE_DIR="${!SOURCE_DIR}"
-		BUILD_DIR="${!BUILD_DIR}"
-		declare -g BUILD_DIR=$(buildDir $kernelVer)
-		declare -g SOURCE_DIR=$(sourceDir $kernelVer)
+	if [[ $ANDROID ]]; then
+		local ver=${kernelVer/./_}
+		local L_ANDROID_KERNEL_DIR=ANDROID_KERNEL_DIR_${ver}
+ 		L_ANDROID_KERNEL_DIR=${!L_ANDROID_KERNEL_DIR}
+		export ANDROID_KERNEL_DIR="${L_ANDROID_KERNEL_DIR/#~/${HOME}}"
 	else
-		export SOURCE_DIR="${!SOURCE_DIR}"
-		export BUILD_DIR="${!BUILD_DIR}"
+		SOURCE_DIR="${!L_SOURCE_DIR/#~/${HOME}}"
+		BUILD_DIR="${!L_BUILD_DIR/#~/${HOME}}"
 	fi
+	export SOURCE_DIR=$(sourceDir $kernelVer)
+	export BUILD_DIR=$(buildDir $kernelVer)
 }
 
 parseArgs()
@@ -1085,8 +1124,11 @@ parseArgs()
 			;;
 			--kernel)
 			KERNEL_VER="$2"
-			export BUILD_DIR=$(buildDir $KERNEL_VERSION)
-			export SOURCE_DIR=$(sourceDir $KERNEL_VERSION)
+			# [[ $ANDROID ]] && exportVars
+			# [[ $ANDROID ]] && logErr "ANDROID_KERNEL_DIR: $ANDROID_KERNEL_DIR"
+
+			# export BUILD_DIR=$(buildDir $KERNEL_VERSION)
+			# export SOURCE_DIR=$(sourceDir $KERNEL_VERSION)
 			shift # past argument
 			shift # past value
 			;;
@@ -1106,11 +1148,11 @@ parseArgs()
 	done
 
 	if [[ $CHROMEOS != "" ]]; then
-		CURRENT_CROS_KERNEL_VERSION=$(crosKernelVersion $KERNEL_VER)
+		CURRENT_CROS_KERNEL_VERSION=$(crosKernelVersion $KERNEL_VERSION)
 	fi
 
 	set -- "${POSITIONAL_ARGS[@]}"
 }
 
 parseArgs $@
-exportVars
+# exportVars

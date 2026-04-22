@@ -5,6 +5,8 @@
 #
 # Test if unrelated changes are properly discarded
 
+#DEPRECATED
+
 FILES="drivers/gpu/drm/i915/display/intel_cursor.c"
 DESCRIPTION="Unrelated changes"
 . test/common.sh
@@ -18,7 +20,7 @@ inlineTest()
 	local discardedfuncs=$5
 	local modname="$(generateModuleName $file)"
 	local moduledir="$WORKDIR/$modname"
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	appendToFunction "$srcDir/$file" $function "$text"
 	appendToFunction "$srcDir/$file" i9xx_update_cursor ";"

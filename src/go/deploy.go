@@ -194,9 +194,9 @@ func generateLoadScript(modulesToLoad, modulesToUnload []dekuModule) (string, er
 	var insmod string
 	var reloadScript = ""
 	var checkTransition = config.kernelVersion >= versionNum(5, 10, 0) // checking patch transition in not reliable on kernel <5.10
-	var sudoCondition = ""
+	var isAndroid = "isAndroid=false"
 	if config.isAndroid {
-		sudoCondition = "&& false"
+		isAndroid = "isAndroid=true"
 	}
 
 	reloadScript += `#!/bin/sh
@@ -211,15 +211,20 @@ INSMOD=insmod
 RMMOD=rmmod
 TEE=tee
 GREP=grep
+` + isAndroid + `
 
-if [ ! $(id -u) -eq 0 ] ` + sudoCondition + `; then
+if [ ! $(id -u) -eq 0 ] && ! $isAndroid; then
 	INSMOD="sudo insmod"
 	RMMOD="sudo rmmod"
 	TEE="sudo tee"
 	GREP="sudo grep"
 fi
+if $isAndroid; then
+	TEE="$TEE -a"
+else
+	TEE="$TEE --append"
+fi
 `
-
 	patchOnlyModules := true
 	for _, module := range modulesToLoad {
 		for _, patch := range module.Patches {
@@ -252,7 +257,7 @@ fi
 
 		unload += "if [ -d " + moduleSys + " ]; then\n"
 		unload += "	for i in $(seq 1 20); do\n"
-		unload += "		out=$(sh -c \"echo 0 | $TEE --append " + moduleSys + "/enabled\" 2>&1) && break\n"
+		unload += "		out=$(sh -c \"echo 0 | $TEE " + moduleSys + "/enabled\" 2>&1) && break\n"
 		unload += "		[ -z \"${out##*Permission denied*}\" ] && { exit " + fmt.Sprintf("%d", ERROR_PERMISSION_DENIED) + "; }\n"
 		unload += "		[ -z \"${out##*I/O error*}\" ] && sleep 1;\n"
 		unload += "	done\n"

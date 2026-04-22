@@ -14,12 +14,12 @@ setCpuOnlineState()
 	local en=$1
 	local sudoCmd=
 	[[ $VM_TEST ]] && sudoCmd="sudo"
-	remoteSh "for i in \$(seq 2 \$(nproc)); do echo $1 | $sudoCmd tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
+	remoteSh "for i in \$(seq 2 \$(nproc --all)); do echo $1 | $sudoCmd tee /sys/devices/system/cpu/cpu\$((i-1))/online > /dev/null; done"
 }
 
 stalledTaskTest()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	logStep -n "Check if stalled task is properly detected... "
 	sed -i "s/oom_reap_task(tsk);/{oom_reap_task(tsk);pr_info(\"\");}/g" "$srcDir/mm/oom_kill.c"

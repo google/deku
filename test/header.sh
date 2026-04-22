@@ -50,6 +50,9 @@ readonly KERNELS_DIR="$HOME/linux-trees"
 readonly TEST_CACHE_DIR="$HOME/.cache/deku"
 readonly ROOTFS_IMG=test/rootfs.qcow2
 
+readonly ANDROID_KERNEL_DIR_6_12="~/aluminium-kernel"
+readonly ANDROID_KERNEL_DIR_6_15="~/aluminium-kernel-mainline"
+
 readonly QEMU_SSH_KEY="test/testing_rsa"
 readonly CROS_SSH_KEY="${CROS_WORKDIR}/testing_rsa"
 readonly VM_SSH_KEY="~/Downloads/quickemu/key"
@@ -57,14 +60,17 @@ readonly VM_SSH_KEY="~/Downloads/quickemu/key"
 readonly QEMU_SSH_PORT="60023"
 readonly CROS_SSH_PORT="2244"
 readonly VM_SSH_PORT="22220"
+readonly ANDROID_SSH_PORT="5583"
 
 readonly QEMU_SOURCE_DIR="$TEST_CACHE_DIR/linux"
 readonly CROS_SOURCE_DIR="/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$CHROMEOS_KERNEL_VER/source"
 readonly VM_SOURCE_DIR="/tmp/deku-vm-mount/linux"
+readonly ANDROID_SOURCE_DIR="$ANDROID_KERNEL_DIR_6_12/common"
 
 readonly QEMU_BUILD_DIR="$TEST_CACHE_DIR/build-linux-deku"
 readonly CROS_BUILD_DIR="/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$CHROMEOS_KERNEL_VER"
 readonly VM_BUILD_DIR="/tmp/deku-vm-mount/linux"
+readonly ANDROID_BUILD_DIR="$ANDROID_KERNEL_DIR_6_12"
 
 declare -g SCRIPT_NAME=$(basename "$0" .sh)
 declare -g KERNEL_VER=

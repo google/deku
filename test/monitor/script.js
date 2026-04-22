@@ -66,6 +66,8 @@ function addKernelSet(name, ...versions)
 	kernelCell.outerHTML = '<th colspan='+versions.length+'><div style="display:flex"><div><input type="checkbox" checked="checked" id="system_check_' + name + '" /></div><div style="flex-grow: 1">' + name + '</div><div id="cellMenu_'+name+'" class="cellMenu"></div></div></th>';
 	addCellMenu(headRow, "*", name, "*", '#cellMenu_'+name);
 	const checkBox = document.getElementById("system_check_" + name);
+	if (name == "android")
+		checkBox.checked = false;
 	checkBox.addEventListener('click', function() {
 		const cells = document.querySelectorAll('table thead th input[type="checkbox"]');
 		let filtered = Array.from(cells).filter(cell => cell.id.startsWith("system_check_") && cell.checked);

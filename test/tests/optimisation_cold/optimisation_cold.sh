@@ -11,6 +11,8 @@
 # 2. Choose one local function that is called from #1
 # 3. Add a new case. The second parameter to 'coldFunctionTest' is function from #1, third parameter is function from #2
 
+# DEPRECATED
+
 FILES="net/core/dev.c net/core/sock.c drivers/gpu/drm/display/drm_dp_mst_topology.c"
 DESCRIPTION="Optimisation - Cold"
 . test/common.sh
@@ -19,7 +21,7 @@ TAGS=test/tags/tags
 
 function findColdFunction()
 {
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 	local files=`find "$BUILD_DIR/drivers" -name "*.o" ! -name '*.mod.o'  -not -path "*lib*"`
 	while read -r file;
 	do
@@ -63,7 +65,7 @@ coldFunctionTest()
 	local function=$2
 	local coldFunction=$3
 	local filename=$(filenameNoExt "$file")
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	revertChanges 2>/dev/null
 
@@ -100,7 +102,7 @@ test()
 
 main()
 {
-	if [[ $CHROMEOS ]]; then
+	if [[ $CHROMEOS$ANDROID ]]; then
 		return
 	fi
 

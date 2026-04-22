@@ -18,6 +18,11 @@ if [[ -z "$latest_kernel" ]]; then
   exit 1
 fi
 
+if ! grep -q "^GRUB_DEFAULT=saved" /etc/default/grub; then
+	sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
+	update-grub
+fi
+
 # Extract the version from the filename
 kernel_version=$(basename "$latest_kernel" | sed 's/vmlinuz-//')
 
@@ -36,7 +41,8 @@ if [[ 0 == 1 ]]; then
 	echo "Updating GRUB configuration..."
 	update-grub
 elif [[ $1 == "test" ]]; then
-	grub-reboot "$grub_entry"
+	# grub-reboot "$grub_entry"
+	grub-set-default "$grub_entry"
 else
 	grub-set-default "$grub_entry"
 fi

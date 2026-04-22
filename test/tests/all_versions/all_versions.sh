@@ -75,6 +75,7 @@ test()
 main()
 {
 	local srcDir=$(sourceDir $KERNEL_VERSION)
+	[[ $ANDROID ]] && return
 
 	test 0
 	# rerun test but build kernel inside source code

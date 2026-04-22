@@ -1,5 +1,6 @@
+.klp.sym.vmlinux.drm_dev_is_unplugged,0
 .klp.sym.vmlinux.i915_gem_object_get_rcu,0
-.klp.sym.vmlinux.i915_gem_object_put,4
+.klp.sym.vmlinux.i915_gem_object_put,2
 .klp.sym.vmlinux.singleton_fops,0
 .klp.sym.vmlinux.vm_ops_cpu,0
 .klp.sym.vmlinux.vm_ops_gtt,0

@@ -26,7 +26,7 @@ checkElfStruct()
 	local fun=$3
 	local text=$4
     local kbuild=$5
-	local srcDir=$(sourceDir $KERNEL_VERSION)
+	local srcDir=$SOURCE_DIR
 
 	local filename=$(filenameNoExt "$srcfile")
 	local modname="$(generateModuleName $srcfile)"

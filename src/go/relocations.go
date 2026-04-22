@@ -261,7 +261,11 @@ func adjustRelocations(module dekuModule) error {
 			symType = "v"
 		}
 
-		modulesDir := getKernelModulesDir(objPath)
+		modulesDir := config.buildDir
+		if !strings.HasSuffix(objPath, "/vmlinux") {
+			modulesDir = getKernelModulesDir(objPath)
+		}
+
 		index, err := findSymbolIndex(symbol.Name, symType, srcFile,
 			modulesDir+symObjPath)
 		if err != nil {

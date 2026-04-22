@@ -312,7 +312,7 @@ func modifiedFiles() []string {
 }
 
 func getKernelModulesDir(koFile string) string {
-	if config.isAndroid {
+	if config.isAndroid && !config.isModule {
 		vendorModule := filepath.Join(config.androidKernelDir, "out", config.board, "dist", filepath.Base(koFile))
 		if fileExists(vendorModule) {
 			return config.androidModulesDir

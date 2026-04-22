@@ -154,6 +154,18 @@ func (init *Init) filesExist(path string, files []string) bool {
 	return true
 }
 
+func getFirstDir(dir string) string {
+	dirs, err := os.ReadDir(dir)
+	if err == nil {
+		for _, d := range dirs {
+			if d.IsDir() {
+				return filepath.Join(dir, d.Name())
+			}
+		}
+	}
+	return ""
+}
+
 func (init *Init) isKernelSourcesDir(path string) bool {
 	return init.filesExist(path, []string{"Kbuild", "Kconfig", "Makefile"})
 }
@@ -174,11 +186,20 @@ func (init *Init) isLinuxHeadersDir(path string) bool {
 	return init.filesExist(path, []string{"Makefile", "Module.symvers", "include/generated/uapi/linux/version.h"})
 }
 
-func (init *Init) findKernelHeaders(path string) string {
+func (init *Init) findKernelHeaders(path string) (string, bool) {
 	// try to find from ".o.cmd" file
+	isAndroid := false
 	dir := findFilePathFromCmdFiles(path, "arch/x86/include/generated/uapi/asm/types.h")
+	if dir == "" {
+		androidSrcDir := findFilePathFromCmdFiles(path, "include/linux/android_kabi.h")
+		if androidSrcDir != "" {
+			isAndroid = true
+			dir = filepath.Join(getFirstDir(androidSrcDir+"../out"), "common") + "/"
+		}
+	}
+
 	if fileExists(dir) {
-		return dir
+		return dir, isAndroid
 	}
 
 	// try to find in the Makefile
@@ -189,7 +210,7 @@ func (init *Init) findKernelHeaders(path string) string {
 			if match != nil {
 				path := strings.Trim(match[1], "\"'")
 				if fileExists(path) {
-					return path + "/"
+					return path + "/", isAndroid
 				}
 				if strings.Contains(path, "$(shell ") {
 					path = strings.ReplaceAll(path, "$(shell ", "$(")
@@ -197,7 +218,7 @@ func (init *Init) findKernelHeaders(path string) string {
 				out, _ := exec.Command("bash", "-c", "echo -n "+path).Output()
 				path = string(out)
 				if fileExists(path) {
-					return path + "/"
+					return path + "/", isAndroid
 				}
 				break
 			} else {
@@ -207,7 +228,7 @@ func (init *Init) findKernelHeaders(path string) string {
 		}
 	}
 
-	return ""
+	return "", false
 }
 
 func (init *Init) checkConfigEnabled(linuxHeadersDir, flag, symbolName string) bool {
@@ -266,7 +287,16 @@ func (init *Init) checkBuildDir(config *Config) error {
 		}
 
 		if config.linuxHeadersDir == "" {
-			config.linuxHeadersDir = init.findKernelHeaders(config.buildDir)
+			isAndroid := false
+			config.linuxHeadersDir, isAndroid = init.findKernelHeaders(config.buildDir)
+			if isAndroid && !config.isAndroid {
+				config.androidKernelDir = strings.Split(config.linuxHeadersDir, "out/bazel/output_user_root")[0]
+				err := init.checkConfigForAndroid(config)
+				if err != nil {
+					return err
+				}
+			}
+
 			if config.linuxHeadersDir == "" {
 				LOG_ERR(nil, "Failed to find kernel headers directory. Please specify it using -k or --headersdir parameter. This is the same parameter as the -C parameter for the `make` command in the Makefile.")
 				return mkError(ERROR_INVALID_HEADERS_DIR)
@@ -418,7 +448,7 @@ func (init *Init) checkConfigForAndroid(config *Config) error {
 		var board []byte
 		var err error
 		if config.deployParams != "" {
-			board, err = ADBExecuteCommand("getprop ro.product.name")
+			board, err = ADBExecuteCommandWithConfig("getprop ro.product.name", *config)
 		}
 		config.board = strings.TrimSpace(string(board))
 
@@ -452,18 +482,6 @@ func (init *Init) checkConfigForAndroid(config *Config) error {
 		return mkError(ERROR_INVALID_BUILDDIR)
 	}
 
-	getFirstDir := func(dir string) string {
-		dirs, err := os.ReadDir(dir)
-		if err == nil {
-			for _, d := range dirs {
-				if d.IsDir() {
-					return filepath.Join(dir, d.Name())
-				}
-			}
-		}
-		return ""
-	}
-
 	for _, dir := range dirs {
 		if dir.IsDir() && !strings.HasPrefix(dir.Name(), ".") {
 			execRootMain := outBase + "/sandbox/linux-sandbox/" + dir.Name() + "/execroot/_main/"
@@ -475,8 +493,11 @@ func (init *Init) checkConfigForAndroid(config *Config) error {
 					LOG_ERR(err, "Failed to read utsversion.h file in the Android kernel directory: %s", androidDir)
 					continue
 				}
-				if !bytes.Contains(utsVer, []byte("Jan  1 00:00:00 UTC 1970")) {
-					config.buildDir = androidDir + "/common/"
+				if !bytes.Contains(utsVer, []byte("Jan  1 00:00:00 UTC 1970")) &&
+					!bytes.Contains(utsVer, []byte("1970-01-01T00:00:00Z")) {
+					if config.buildDir == "" {
+						config.buildDir = androidDir + "/common/"
+					}
 					clangDir := getFirstDir(execRootMain + "/prebuilts/clang/host/linux-x86/")
 					config.llvm = clangDir + "/bin/"
 				}
@@ -556,7 +577,8 @@ func (init *Init) checkConfig(config *Config) error {
 	}
 
 	if config.linuxHeadersDir != "" {
-		if !init.isLinuxHeadersDir(config.linuxHeadersDir) {
+		isHeadersDir := init.isLinuxHeadersDir(config.linuxHeadersDir)
+		if !isHeadersDir {
 			LOG_ERR(nil, "Given headers directory is not a valid linux headers directory: %s", config.linuxHeadersDir)
 			return mkError(ERROR_INVALID_HEADERS_DIR)
 		}
@@ -565,7 +587,10 @@ func (init *Init) checkConfig(config *Config) error {
 	}
 
 	if !init.isKlpEnabled(config.linuxHeadersDir) {
-		if config.board != "" {
+		if config.isAndroid {
+			LOG_ERR(nil, "Kernel livepatching is not enabled. Please use './replace_prebuilts.py --build-kernel --keep-build-dir --kleaf-common-args=\"--debug\" <ANDROID_KERNEL_PATH>' to build the kernel")
+			return mkError(ERROR_KLP_IS_NOT_ENABLED)
+		} else if config.board != "" {
 			LOG_ERR(nil, `Your kernel must be build with: USE="livepatch kernel_sources" emerge-%s chromeos-kernel-...`, config.board)
 			return mkError(ERROR_INSUFFICIENT_BUILD_PARAMS)
 		} else {
