@@ -121,11 +121,14 @@ main()
 
 	if [[ $CROS_WORKON_SRCROOT != "" ]]; then
 		Id+=_cros
-		MAIN_DIR=$HOME/chromiumos/ct/
+		MAIN_DIR=$HOME/chromiumos/linux-trees/
 		[ ! -s $HOME/chromiumos/id ] && echo "No ID file" && exit 1
 		Id+=_$(<$HOME/chromiumos/id)
 	else
-		[ ! -e $HOME/ct ] && MAIN_DIR=$HOME
+		# [ ! -e $HOME/ct ] && MAIN_DIR=$HOME
+		# [ ! -e $HOME/ct ] && MAIN_DIR=/kernel/
+		# [ ! -e $HOME/ct ] && MAIN_DIR=$HOME/linux-trees/
+		MAIN_DIR=$HOME/linux-trees/
 	fi
 
 	# check if MAIN_DIR is empty if so then exit with error

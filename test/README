@@ -1,0 +1,45 @@
+cd ~/
+./moun.sh
+# sudo mount --bind ~/ ~/chromeos/ct
+# sudo mount --bind ~/ ~/chromeos2/ct
+# sudo mount --bind ~/linux-trees ~/chromeos/linux-trees
+
+# build DEKU inside the docker
+docker run -it  --network="host" -v ~/linux-trees:/kernel -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest
+make clean && make
+
+# run agent on the host for qemu and vm tests
+./test/agent.sh
+
+# init go-webui
+cd monitor
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/webui-dev/go-webui/main/setup.sh)"
+
+# prepare docker image
+docker build -t deku_test:latest .
+
+
+#####################################################
+# Run test on QEMU
+######################################################
+# build DEKU inside the docker
+docker run -it --network="host" -v ~/linux-trees:/kernel -v ~/linux-trees:/home/deku/linux-trees -v$(pwd):/deku -v /tmp:/tmp --workdir /deku deku_test:latest
+make clean && make
+# run agent on the host for qemu and vm tests on the host
+./test/agent.sh
+
+#####################################################
+# Run test on VM
+######################################################
+# run agent on the host for vm tests
+./test/agent.sh
+
+#####################################################
+# Run test on CrOS
+######################################################
+sudo mount --bind ~/linux-trees ~/chromeos/linux-trees
+go run ~/chromeos/src/platform/dev/contrib/sshwatcher/sshwatcher.go lab_brya 2244
+cros_sdk
+# inside cros_sdk
+make clean && make
+~/chromiumos/deku $ ./test/agent.sh

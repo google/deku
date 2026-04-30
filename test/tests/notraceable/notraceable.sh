@@ -152,7 +152,7 @@ test()
 		return
 	fi
 
-	if [[ $KERNEL_VERSION == v6.14.* || $KERNEL_VERSION == v6.16-* ]]; then
+	if [[ $KERNEL_VERSION == v6.14.* || $KERNEL_VERSION =~ ^v[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
 		checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok f:cpuidle_enter_s2idle
 		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply"
 		checkNontraceable drivers/md/dm-table.c dm_table_get_size fail

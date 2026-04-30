@@ -10,6 +10,7 @@ https://github.com/user-attachments/assets/7039f450-62c5-426d-8bd0-e72b2d659cf1
 
 ## Table of Contents
 - [About the DEKU](#about)
+- [Android](#android)
 - [ChromiumOS](#chromiumos)
 - [Prerequisites](#prerequisites)
 - [Download & build](#download)
@@ -23,6 +24,10 @@ https://github.com/user-attachments/assets/7039f450-62c5-426d-8bd0-e72b2d659cf1
 <a name="about"></a>
 ## About the DEKU
 The DEKU is a utility for quickly applying changes from the Linux kernel source code to a running kernel on the device. DEKU uses the kernel livepatching feature to apply changes to a running kernel. This tool is primarily intended for Linux kernel developers, but can also be useful for researchers to learn how the kernel works.
+
+<a name="android"></a>
+## For Android developers
+Support for Android kernel development is coming soon.
 
 <a name="chromiumos"></a>
 ## For ChromiumOS developers

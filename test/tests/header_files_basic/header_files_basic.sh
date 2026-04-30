@@ -154,7 +154,7 @@ expectedPatches_6_12=(
 	patch_f3cfb068_hid_redragon
 )
 
-expectedPatches_6_16=(
+expectedPatches_upstream=(
 	patch_0711c614_hid_monterey
 	patch_147bf8e3_hid_sunplus
 	patch_1eee55b7_hid_petalynx
@@ -669,8 +669,8 @@ test()
 		expectedPatches="${expectedPatches_6_6[@]}"
 	elif [[ "$KERNEL_VERSION" == "v6.12."* ]]; then
 		expectedPatches="${expectedPatches_6_12[@]}"
-	elif [[ "$KERNEL_VERSION" == "v6.16-"* ]]; then
-		expectedPatches="${expectedPatches_6_16[@]}"
+	elif [[ "$KERNEL_VERSION" =~ ^v[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
+		expectedPatches="${expectedPatches_upstream[@]}"
 
 	elif [[ "$KERNEL_VER" == "v6.8" ]]; then
 		expectedPatches="${expectedPatches_ubuntu_6_8[@]}"

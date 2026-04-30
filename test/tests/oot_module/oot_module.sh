@@ -107,7 +107,7 @@ checkOotModule()
 	# 	grep -q "The 'helper_print_init_message' function is forbidden to modify. The function is non-local" <<< "$out" || exitError
 	# fi
 
-	if [[ $VM_TEST == "" && $ANDROID == "" && $KERNEL_VERSION != v6.16* ]]; then
+	if [[ $VM_TEST == "" && $ANDROID == "" && ! $KERNEL_VERSION =~ ^v[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
 		logStep "Check if no-valid kernel headers are detected..."
 		out=$(dekuDeploy --stdout --builddir $dekuModDir) && exitError 6
 		[[ $? != $ERROR_INVALID_HEADERS_DIR ]] && exitError

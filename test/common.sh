@@ -266,6 +266,13 @@ runQemu()
 				sleep 0.8
 			done
 			logInfo "Starting QEMU..."
+			logInfo $qemuexec -kernel "$KERNEL_IMAGE" \
+					  -drive ${diskParam}format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
+					  -append "$cmdline" -serial file:$logFile -smp 4 -m 256 \
+					  -device virtio-net-pci,netdev=net0,romfile="" \
+					  -vnc none -netdev type=user,id=net0 \
+					  -nic "user,hostfwd=tcp::$SSH_PORT-:22" \
+					  -daemonize $enablekvm $extraparams
 			$qemuexec -kernel "$KERNEL_IMAGE" \
 					  -drive ${diskParam}format=qcow2,file="$ROOTFS_IMG,snapshot=on" \
 					  -append "$cmdline" -serial file:$logFile -smp 4 -m 256 \
@@ -423,7 +430,7 @@ prepareKernelSources()
 	[[ "$TEST_ON_CHROMEBOOK" || "$CHROMEOS" || "$LOCAL_TEST" ]] && return
 
 	if [[ $VM_TEST != "" ]]; then
-		# remoteSh "git clone -b master https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble linux-deku-test"
+		# remoteSh "git clone -b master https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble linux"
 		return
 	elif [[ $ARM64 != "" ]]; then
 		git clone https://github.com/madvenka786/linux.git "$srcDir"
@@ -665,7 +672,14 @@ buildKernelToLaunch()
 		return 0
 	elif [[ $VM_TEST != "" ]]; then
 		$skipDeployKernel && [[ $modifiedSrcFiles == "" ]] && return;
-		logInfo "Building the kernel..."
+		srcDir="\$HOME/linux"
+		local tag=$(remoteShOut git -C $srcDir describe --exact-match --tags)
+		# replace "/" with "_" in tag
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!TAG=$tag"
+		tag=${tag//\//_}
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!TAG=$tag"
+		local cacheFile="\$HOME/linux-trees/cache/vm_$tag.buildcache"
+		logInfo "Building the kernel...  $modifiedSrcFiles"
 		#KBUILD_BUILD_TIMESTAMP=0 KBUILD_BUILD_VERSION=1 KDEB_PKGVERSION=1;
 		local cmd="
 					find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;
@@ -675,6 +689,17 @@ buildKernelToLaunch()
 						>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
 						exit 1;
 					};"
+		if [[ $modifiedSrcFiles == "" && -e $cacheFile ]]; then
+			cmd+="
+					echo 'Restoring build cache...';
+					# tar -xf $cacheFile 2>&1;
+					"
+		elif [[ $modifiedSrcFiles == "" &&  ! -e $cacheFile ]]; then
+			cmd+="
+					echo 'Creating build cache...';
+					time tar -I 'pzstd --ultra -20' -cpf $cacheFile linux;
+				"
+		fi
 		if ! $onlyBuild; then
 			cmd+="
 					sudo apt install -y --allow-downgrades ./linux-image-*_amd64.deb ./linux-headers-*_amd64.deb 2>&1;
@@ -689,6 +714,7 @@ buildKernelToLaunch()
 	else
 		$skipDeployKernel && [[ $modifiedSrcFiles == "" ]] && return
 		logInfo "Building the kernel..."
+		logInfo docker run --env KBUILD_BUILD_HOST=$exportBuildHost -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 		docker run --env KBUILD_BUILD_HOST=$exportBuildHost -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" -j`nproc` >> $logFile 2>&1
 	fi
 }
@@ -740,7 +766,7 @@ prepareKernel()
 		if [[ $version == v6.11 ]]; then
 			tag="Ubuntu-hwe-6.11-6.11.0-17.17_24.04.2"
 		elif [[ $version == v6.14 ]]; then
-			tag="hwe-6.14-next"
+			tag="origin/hwe-6.14-next"
 		else
 			tag="Ubuntu-6.8.0-49.49"
 		fi
@@ -777,6 +803,7 @@ prepareKernel()
 					scripts/config --disable SYSTEM_REVOCATION_KEYS;
 					scripts/config --set-str CONFIG_SYSTEM_TRUSTED_KEYS '';
 					scripts/config --set-str CONFIG_SYSTEM_REVOCATION_KEYS '';
+					scripts/config --disable DELL_UART_BACKLIGHT;
 					"
 		remoteShOut "$cmd" || { logErr "Fail to prepare kernel"; return 1; }
 	elif [[ $ANDROID ]]; then # TODO
@@ -786,6 +813,7 @@ prepareKernel()
 		git -C "$srcDir" clean -d -f > /dev/null 2>&1
 
 		[[ "$usellvm" == "llvm" ]] && extraparams="CC=clang"
+		logInfo docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" defconfig >/dev/null 2>&1
 		docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" defconfig >/dev/null 2>&1
 		sed -i s/=m/=y/g "$buildDir/.config"
 		enableKernelConfig FRAME_POINTER_VALIDATION
@@ -796,6 +824,7 @@ prepareKernel()
 		# enableKernelConfig DEBUG_INFO
 		# enableKernelConfig GDB_SCRIPTS
 		enableKernelConfig BT --module
+		logInfo docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" olddefconfig >/dev/null 2>&1
 		docker run -t -v ~/linux-trees:/kernel deku_test:latest make $extraparams -C "${srcDir##*/}" O="../${buildDir##*/}" olddefconfig >/dev/null 2>&1
 		cp -f $(kernelConfigFile) /tmp/deku_test_config.backup
 	fi
@@ -993,9 +1022,12 @@ dekuDeploy()
 					 ${args[@]} 2>&1)
 	elif [[ $VM_TEST != "" ]]; then
 		[[ ! $buildDirIsSet ]] && builddir="--builddir=../linux"
-		out=$(remoteShOut "cd deku; ./deku --workdir=workdir_test \
+		# out=$(remoteShOut "cd deku; ./deku --workdir=workdir_test \
+		# 			 $builddir \
+		# 			 ${args[@]}" 2>&1)
+		remoteShOut "cd deku; ./deku --workdir=workdir_test \
 					 $builddir \
-					 ${args[@]}" 2>&1)
+					 ${args[@]}" 2>&1
 	elif [[ $ANDROID ]]; then
 		[[ ! $buildDirIsSet ]] && builddir="--android_kernel $ANDROID_KERNEL_DIR"
 		out=$(./deku --workdir="$WORKDIR" \

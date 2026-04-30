@@ -82,7 +82,7 @@ main()
 {
 	# addTest patch
 	prepareTests
-	runTests 6.12
+	runTests 6.15
 }
 
 main $@

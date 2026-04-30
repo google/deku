@@ -52,6 +52,7 @@ checkErr()
 	rm -rf test/logs/pass/$(basename $(logFile vm))
 	rm -rf test/logs/fails/workdir/$TEST_ID
 	rm -rf test/logs/pass/workdir/$TEST_ID
+	mv deku_*.ko $WORKDIR
 
 	if [[ $err != 0 ]]; then
 		logErr "${RED}$testdesc [$test] test failed with error code: $err${NC}"
@@ -148,6 +149,7 @@ function runTest()
 	rm -f $(logFile cros)
 	rm -f $(logFile qemu)
 	rm -f $(logFile vm)
+	rm deku_*.ko
 
 	skipPrepareKernel=
 	skipPrepareKernelAndDeploy=
@@ -334,6 +336,7 @@ main()
 	exportVars $kernVer
 
 	if [[ $VM_TEST ]]; then
+		chmod 777 $HOME/linux-trees/cache
 		mkdir -p /tmp/deku-vm-mount
 		if mount | grep -qF "/tmp/deku-vm-mount"; then
 			# if /tmp/deku-vm-mount is empty then umount /tmp/deku-vm-mount

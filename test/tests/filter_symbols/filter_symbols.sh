@@ -83,7 +83,7 @@ filterTest()
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" | grep -q "contains 2 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" && exitError
-	elif [[ $KERNEL_VERSION == v6.16-* ]]; then
+	elif [[ $KERNEL_VERSION == v6.18-* ]]; then
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__bug_table'" && exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela__jump_table'" | grep -q "contains 3 entries:" || exitError
 		readelf -a -W "$ofile" | grep "Relocation section '.rela.return_sites'" && exitError

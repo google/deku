@@ -281,7 +281,7 @@ func showAgents(w ui.Window) {
 	runJS(fmt.Sprintf("showAgents('%s');", "test"))
 }
 
-const TESTS_MAIN_DIR = "/usr/local/google/home/mmaslanka/"
+const TESTS_MAIN_DIR = "/usr/local/google/home/mmaslanka/linux-trees"
 
 func getAgentFor(dir string) []string {
 	agents := []string{}

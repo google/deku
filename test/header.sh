@@ -55,12 +55,12 @@ readonly ANDROID_KERNEL_DIR_6_15="~/aluminium-kernel-mainline"
 
 readonly QEMU_SSH_KEY="test/testing_rsa"
 readonly CROS_SSH_KEY="${CROS_WORKDIR}/testing_rsa"
-readonly VM_SSH_KEY="~/Downloads/quickemu/key"
+readonly VM_SSH_KEY="~/Downloads/quickemu/ubuntu-24.04/key"
 
 readonly QEMU_SSH_PORT="60023"
 readonly CROS_SSH_PORT="2244"
 readonly VM_SSH_PORT="22220"
-readonly ANDROID_SSH_PORT="5583"
+readonly ANDROID_SSH_PORT="5582"
 
 readonly QEMU_SOURCE_DIR="$TEST_CACHE_DIR/linux"
 readonly CROS_SOURCE_DIR="/build/${CROS_BOARD}/var/cache/portage/sys-kernel/chromeos-kernel-$CHROMEOS_KERNEL_VER/source"
