@@ -8,6 +8,7 @@ package main
 #include <stdlib.h>
 
 int _mklivepatch(const char *file, const char *relocations);
+char* findObjWithSymbol(const char* sym, const char* srcFile, const char* objPath, const char* workdir, const char* kernelSrcDir, const char* buildDir);
 */
 import "C"
 
@@ -17,11 +18,18 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"unsafe"
 )
+
+//export generateSymbolsC
+func generateSymbolsC(objFile *C.char) C.int {
+	if generateSymbols(C.GoString(objFile)) {
+		return 1
+	}
+	return 0
+}
 
 type relocation struct {
 	Name      string
@@ -31,87 +39,9 @@ type relocation struct {
 	SymIndex  uint32
 }
 
-func findObjWithSymbol(sym, srcFile, objPath string) (string, error) {
-	// TODO: Consider checking type of the symbol
-	LOG_DEBUG("Find object file for symbol: %s %s (%s)", sym, srcFile, objPath)
-	if objPath == "vmlinux" {
-		return "vmlinux", nil
-	}
+// rewrite findObjWithSymbol to the C lang. Place this function in the new "relocations.c" file and use it
 
-	re := regexp.MustCompile("(?m)^" + strings.ReplaceAll(sym, ".", "\\.") + "$")
-
-	symObjPath := strings.TrimSuffix(objPath, ".ko")
-	symObjPath = filepath.Join(config.workdir, SYMBOLS_DIR, symObjPath)
-	data, _ := os.ReadFile(symObjPath) // ignore error. File might not exists
-
-	if re.FindString(string(data)) != "" {
-		LOG_DEBUG("Found in the same module: %s", objPath)
-		return objPath, nil
-	}
-
-	srcPath := filepath.Join(config.kernelSrcDir, filepath.Dir(srcFile))
-	modulesPath := filepath.Join(config.buildDir, filepath.Dir(srcFile))
-	for {
-		files := readLines(filepath.Join(modulesPath, "modules.order"))
-		for _, file := range files {
-			file = strings.TrimPrefix(file, modulesPath)
-			path := filepath.Join(config.workdir, SYMBOLS_DIR, filepath.Dir(file))
-			if !generateSymbols(file) {
-				continue
-			}
-
-			var files, err = os.ReadDir(path)
-			if err != nil {
-				LOG_ERR(err, "Fail to list files in: %s", path)
-				return "", err
-			}
-
-			for _, symbolsFile := range files {
-				if symbolsFile.IsDir() {
-					continue
-				}
-				data, err := os.ReadFile(filepath.Join(path, symbolsFile.Name()))
-				if err != nil {
-					LOG_ERR(err, "Fail to read file: %s", filepath.Join(path, symbolsFile.Name()))
-					return "", err
-				}
-				if re.FindString(string(data)) != "" {
-					res := filepath.Join(filepath.Dir(file), symbolsFile.Name()) + ".ko"
-					LOG_DEBUG("Found in: %s", res)
-					return res, nil
-				}
-			}
-		}
-
-		if fileExists(filepath.Join(srcPath, "Kconfig")) {
-			break
-		}
-
-		srcPath = filepath.Dir(srcPath)
-		modulesPath = filepath.Dir(modulesPath)
-		if modulesPath+"/" == config.buildDir {
-			break
-		}
-	}
-
-	if fileExists(config.buildDir + "System.map") {
-		systemMap, err := os.ReadFile(config.buildDir + "System.map")
-		if err != nil {
-			LOG_ERR(err, "Fail to read System.map: %s", config.buildDir+"System.map")
-			return "", err
-		}
-
-		if re.FindString(string(systemMap)) != "" {
-			LOG_DEBUG("Found in: vmlinux")
-			return "vmlinux", nil
-		}
-	}
-
-	LOG_ERR(nil, "Fail to find object file for symbol: %s %s", sym, srcFile)
-	os.Exit(ERROR_CANT_FIND_SYMBOL)
-
-	return "", errors.New("Symbol not found")
-}
+// findObjWithSymbol was rewritten to C and is declared in the Cgo block.
 
 func getSymbolsToRelocate(module dekuModule, extraSymVers string) ([]relocation, error) {
 	var syms []relocation
@@ -247,11 +177,28 @@ func adjustRelocations(module dekuModule) error {
 			}
 		}
 
-		symObjPath, err := findObjWithSymbol(symbol.Name, srcFile, objPath)
-		if err != nil {
-			LOG_ERR(err, "Can't find symbol: %s", symbol.Name)
+		csym := C.CString(symbol.Name)
+		csrcFile := C.CString(srcFile)
+		cobjPath := C.CString(objPath)
+		cworkdir := C.CString(config.workdir)
+		ckernelSrcDir := C.CString(config.kernelSrcDir)
+		cbuildDir := C.CString(config.buildDir)
+
+		cres := C.findObjWithSymbol(csym, csrcFile, cobjPath, cworkdir, ckernelSrcDir, cbuildDir)
+		
+		C.free(unsafe.Pointer(csym))
+		C.free(unsafe.Pointer(csrcFile))
+		C.free(unsafe.Pointer(cobjPath))
+		C.free(unsafe.Pointer(cworkdir))
+		C.free(unsafe.Pointer(ckernelSrcDir))
+		C.free(unsafe.Pointer(cbuildDir))
+
+		if cres == nil {
+			LOG_ERR(nil, "Can't find symbol: %s", symbol.Name)
 			os.Exit(ERROR_CANT_FIND_SYMBOL)
 		}
+		symObjPath := C.GoString(cres)
+		C.free(unsafe.Pointer(cres))
 
 		symType := ""
 		if symbol.SymType == elf.STT_FUNC {
