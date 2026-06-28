@@ -6,6 +6,7 @@ package main
 
 /*
 #include <stdlib.h>
+#include "../relocations.h"
 
 int _mklivepatch(const char *file, const char *relocations);
 char* findObjWithSymbol(const char* sym, const char* srcFile, const char* objPath, const char* workdir, const char* kernelSrcDir, const char* buildDir);
@@ -18,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"unsafe"
 )
@@ -43,69 +43,51 @@ type relocation struct {
 
 // findObjWithSymbol was rewritten to C and is declared in the Cgo block.
 
+// getSymbolsToRelocate was rewritten to C and is declared in the Cgo block.
 func getSymbolsToRelocate(module dekuModule, extraSymVers string) ([]relocation, error) {
-	var syms []relocation
-	ignoreSymbols := []string{"printk", "_printk", "__this_module"}
-	undefinedSymbols, err := getUndefinedSymbols(module.KoFile)
-	if err != nil {
+	var patchNames []*C.char
+	for _, p := range module.Patches {
+		patchNames = append(patchNames, C.CString(p.Name))
+	}
+	defer func() {
+		for _, p := range patchNames {
+			C.free(unsafe.Pointer(p))
+		}
+	}()
+
+	var cPatchNames **C.char
+	if len(patchNames) > 0 {
+		cPatchNames = (**C.char)(unsafe.Pointer(&patchNames[0]))
+	}
+
+	cKoFile := C.CString(module.KoFile)
+	defer C.free(unsafe.Pointer(cKoFile))
+	cLinuxHeadersDir := C.CString(config.linuxHeadersDir)
+	defer C.free(unsafe.Pointer(cLinuxHeadersDir))
+	cExtraSymVers := C.CString(extraSymVers)
+	defer C.free(unsafe.Pointer(cExtraSymVers))
+
+	var outCount C.int
+	cRelocs := C.getSymbolsToRelocate(cKoFile, C.int(len(patchNames)), cPatchNames, cLinuxHeadersDir, cExtraSymVers, &outCount)
+	if cRelocs == nil && outCount < 0 {
+		err := errors.New("failed to get symbols to relocate in C")
 		LOG_ERR(err, "Failed to fetch undefined symbols for %s", module.KoFile)
 		return []relocation{}, err
 	}
+	defer C.freeRelocations(cRelocs, outCount)
 
-	for _, sym := range undefinedSymbols {
-		symName := sym.Name
-		patchName := ""
-		for _, patch := range module.Patches {
-			if strings.HasPrefix(symName, DEKU_PATCH_REF_SYM_PREFIX+patch.Name+"_") {
-				symName = symName[len(DEKU_PATCH_REF_SYM_PREFIX+patch.Name+"_"):]
-				patchName = patch.Name
-				break
-			}
+	var syms []relocation
+	if outCount > 0 && cRelocs != nil {
+		slice := unsafe.Slice(cRelocs, int(outCount))
+		for _, r := range slice {
+			syms = append(syms, relocation{
+				Name:      C.GoString(r.name),
+				SymType:   elf.SymType(r.symType),
+				PatchName: C.GoString(r.patchName),
+				Pos:       uint16(r.pos),
+				SymIndex:  uint32(r.symIndex),
+			})
 		}
-
-		if slicesContains(ignoreSymbols, symName) {
-			continue
-		}
-
-		re := regexp.MustCompile("\\b" + symName + "\\b")
-		if fileExists(config.linuxHeadersDir + "vmlinux.symvers") { // vmlinux.symvers in some kernel versions is combined into Module.symvers and not exists since v6.3
-			symVers, err := os.ReadFile(config.linuxHeadersDir + "vmlinux.symvers")
-			if err != nil {
-				LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir+"vmlinux.symvers", err)
-			}
-
-			if re.FindString(string(symVers)) != "" {
-				continue
-			}
-		}
-
-		symVers, err := os.ReadFile(config.linuxHeadersDir + "Module.symvers")
-		if err != nil {
-			LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir+"Module.symvers", err)
-		}
-
-		if re.FindString(string(symVers)) != "" {
-			continue
-		}
-
-		if extraSymVers != "" {
-			symVers, err = os.ReadFile(config.linuxHeadersDir + extraSymVers)
-			if err != nil {
-				LOG_WARN("Failed to read file: %s. %s", config.linuxHeadersDir+"Module.symvers", err)
-			}
-
-			if re.FindString(string(symVers)) != "" {
-				continue
-			}
-		}
-
-		syms = append(syms, relocation{
-			Name:      symName,
-			SymType:   elf.ST_TYPE(sym.Info),
-			Pos:       0,
-			PatchName: patchName,
-			SymIndex:  uint32(sym.Value),
-		})
 	}
 
 	LOG_DEBUG("Symbols to relocate: %+v", syms)

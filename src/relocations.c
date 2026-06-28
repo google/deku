@@ -6,9 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// Fallback log macros if not provided by environment
-#define LOG_DEBUG(...) printf(__VA_ARGS__); printf("\n")
-#define LOG_ERR(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n")
+#include "relocations.h"
+#include "libelfutils.h"
 
 extern int generateSymbolsC(char* objFile);
 
@@ -303,4 +302,182 @@ char* findObjWithSymbol(const char* sym, const char* srcFile, const char* objPat
 
 	LOG_ERR("Fail to find object file for symbol: %s %s", sym, srcFile);
 	return NULL;
+}
+
+void freeRelocations(Relocation *relocs, int count)
+{
+	if (!relocs)
+		return;
+	for (int i = 0; i < count; i++)
+	{
+		free(relocs[i].name);
+		free(relocs[i].patchName);
+	}
+	free(relocs);
+}
+
+static char *read_entire_file(const char *filepath)
+{
+	if (!filepath || !file_exists(filepath))
+		return NULL;
+	FILE *f = fopen(filepath, "r");
+	if (!f)
+		return NULL;
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	if (fsize < 0)
+	{
+		fclose(f);
+		return NULL;
+	}
+	char *str = malloc(fsize + 1);
+	if (!str)
+	{
+		fclose(f);
+		return NULL;
+	}
+	size_t read_bytes = fread(str, 1, fsize, f);
+	str[read_bytes] = '\0';
+	fclose(f);
+	return str;
+}
+
+Relocation* getSymbolsToRelocate(const char *koFile, int patchCount, char **patchNames,
+                                 const char *linuxHeadersDir, const char *extraSymVers, int *outCount)
+{
+	*outCount = 0;
+	if (!koFile)
+		return NULL;
+
+	int fd = -1;
+	Elf *elf = openElf(koFile, true, &fd);
+	if (!elf)
+	{
+		LOG_ERR("Failed to open ELF file for %s", koFile);
+		return NULL;
+	}
+
+	Elf_Scn *scn = getSectionByName(elf, ".symtab");
+	if (!scn)
+	{
+		elf_end(elf);
+		if (fd != -1) close(fd);
+		return NULL;
+	}
+
+	GElf_Shdr shdr;
+	if (gelf_getshdr(scn, &shdr) == NULL)
+	{
+		elf_end(elf);
+		if (fd != -1) close(fd);
+		return NULL;
+	}
+
+	Elf_Data *data = elf_getdata(scn, NULL);
+	if (!data)
+	{
+		elf_end(elf);
+		if (fd != -1) close(fd);
+		return NULL;
+	}
+
+	char vmlinux_symvers_path[4096];
+	snprintf(vmlinux_symvers_path, sizeof(vmlinux_symvers_path), "%s%s", linuxHeadersDir ? linuxHeadersDir : "", "vmlinux.symvers");
+	char *vmlinux_symvers = read_entire_file(vmlinux_symvers_path);
+
+	char module_symvers_path[4096];
+	snprintf(module_symvers_path, sizeof(module_symvers_path), "%s%s", linuxHeadersDir ? linuxHeadersDir : "", "Module.symvers");
+	char *module_symvers = read_entire_file(module_symvers_path);
+
+	char *extra_symvers = NULL;
+	if (extraSymVers && extraSymVers[0] != '\0')
+	{
+		char extra_symvers_path[4096];
+		snprintf(extra_symvers_path, sizeof(extra_symvers_path), "%s%s", linuxHeadersDir ? linuxHeadersDir : "", extraSymVers);
+		extra_symvers = read_entire_file(extra_symvers_path);
+	}
+
+	size_t cnt = shdr.sh_size / shdr.sh_entsize;
+	Relocation *relocs = NULL;
+	int capacity = 0;
+
+	for (size_t i = 1; i < cnt; i++)
+	{
+		GElf_Sym sym;
+		if (gelf_getsym(data, i, &sym) == NULL)
+			continue;
+
+		if (sym.st_shndx != SHN_UNDEF)
+			continue;
+
+		const char *symName = elf_strptr(elf, shdr.sh_link, sym.st_name);
+		if (!symName || symName[0] == '\0')
+			continue;
+
+		int st_type = GELF_ST_TYPE(sym.st_info);
+		if (st_type != STT_OBJECT && st_type != STT_FUNC && st_type != STT_NOTYPE)
+			continue;
+
+		const char *patchName = "";
+		const char *prefix_const = "__deku_patch_ref_";
+		for (int p = 0; p < patchCount; p++)
+		{
+			if (!patchNames[p])
+				continue;
+			char full_prefix[1024];
+			snprintf(full_prefix, sizeof(full_prefix), "%s%s_", prefix_const, patchNames[p]);
+			size_t prefix_len = strlen(full_prefix);
+			if (strncmp(symName, full_prefix, prefix_len) == 0)
+			{
+				symName += prefix_len;
+				patchName = patchNames[p];
+				break;
+			}
+		}
+
+		if (strcmp(symName, "printk") == 0 || strcmp(symName, "_printk") == 0 || strcmp(symName, "__this_module") == 0)
+			continue;
+
+		char pattern[1024];
+		snprintf(pattern, sizeof(pattern), "\\b%s\\b", symName);
+
+		if (vmlinux_symvers && regex_match(pattern, vmlinux_symvers))
+			continue;
+
+		if (module_symvers && regex_match(pattern, module_symvers))
+			continue;
+
+		if (extra_symvers && regex_match(pattern, extra_symvers))
+			continue;
+
+		if (*outCount >= capacity)
+		{
+			capacity = capacity == 0 ? 16 : capacity * 2;
+			Relocation *new_relocs = realloc(relocs, capacity * sizeof(Relocation));
+			if (!new_relocs)
+			{
+				LOG_ERR("Out of memory reallocating relocs");
+				break;
+			}
+			relocs = new_relocs;
+		}
+
+		relocs[*outCount].name = strdup(symName);
+		relocs[*outCount].symType = st_type;
+		relocs[*outCount].patchName = strdup(patchName);
+		relocs[*outCount].pos = 0;
+		relocs[*outCount].symIndex = (unsigned int)i;
+		(*outCount)++;
+	}
+
+	free(vmlinux_symvers);
+	free(module_symvers);
+	free(extra_symvers);
+
+	elf_end(elf);
+	if (fd != -1)
+		close(fd);
+
+	return relocs;
 }
