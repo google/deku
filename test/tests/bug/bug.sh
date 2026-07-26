@@ -48,12 +48,16 @@ check()
 	remoteSh "rm -f /tmp/a; touch /tmp/a; chmod 644 /tmp/a"
 	sleep 1
 
-	if [[ $text == *"BUG"* ]]; then
+	if [[ "$KERNEL_VERSION" =~ ^v[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
 		checkIfDmesgContains "] kernel BUG at fs/open.c" || testExit 7
-	fi
+	else
+		if [[ $text == *"BUG"* ]]; then
+			checkIfDmesgContains "] kernel BUG at fs/open.c" || testExit 8
+		fi
 
-	if [[ $text == *"WARN"* ]]; then
-		checkIfDmesgContains "] WARNING: CPU: " || testExit 8
+		if [[ $text == *"WARN"* ]]; then
+			checkIfDmesgContains "] WARNING: CPU: " || testExit 9
+		fi
 	fi
 }
 

@@ -46,63 +46,7 @@ fn find_regex_from_position(buffer: &[u8], start_pos: usize, regex: &Regex) -> O
     None
 }
 
-fn main() -> io::Result<()> {
-	let mut file_path = "";
-	let args: Vec<String> = env::args().collect();
-	let mut modify_first_mid_last = false;
-	let mut modify_all_functions = false;
-	let mut modify_fun_at_index: Option<usize> = None;
-	let mut modify_fun_with_name: Option<String> = None;
-	let mut add_before_fun_with_name: Option<String> = None;
-    let mut show_functions_list = false;
-	let mut exclude: Vec<String> = Vec::new();
-    let mut text_to_insert = "".to_string();
-
-	if args.len() == 2 {
-        file_path = args[1].as_str();
-        show_functions_list = true;
-    }
-	else if args.len() > 4 {
-		if args[1] == "mod_funcs" {
-			if args[2] == "-1" {
-				modify_first_mid_last = true;
-				file_path = args[3].as_str();
-                text_to_insert = args[4].as_str().to_owned();
-			} else if args[2] == "-2" {
-				modify_all_functions = true;
-				file_path = args[3].as_str();
-                text_to_insert = args[4].as_str().to_owned();
-                if args.len() > 6 && args[5] == "--exclude"  {
-                    for i in 6..args.len() {
-                        exclude.push(args[i].to_string());
-                    }
-                }
-			} else if args[2].bytes().all(|c| c.is_ascii_digit()) {
-                modify_fun_at_index = Some(args[2].parse::<usize>().unwrap());
-				file_path = args[3].as_str();
-                text_to_insert = args[4].as_str().to_owned();
-            } else {
-                modify_fun_with_name = Some(args[2].to_string());
-				file_path = args[3].as_str();
-                text_to_insert = args[4].as_str().to_owned();
-            }
-		} else if args[1] == "add_before_function" {
-            add_before_fun_with_name = Some(args[2].to_string());
-            file_path = args[3].as_str();
-            text_to_insert = args[4].as_str().to_owned();
-        }
-	} else {
-        println!("No valid parameters");
-        exit(1);
-    }
-
-    if !Path::new(file_path).exists() {
-        println!("File {} doesn't exists.", file_path);
-        exit(1);
-    }
-
-    text_to_insert = text_to_insert.replace("\\n", "\n");
-    let mut buffer = fs::read(file_path).unwrap();
+fn find_functions(buffer: &[u8], exclude: &[String], skip_init_exit: bool) -> Vec<Function> {
     let mut content: Vec<char> = Vec::new();
 
     let mut prev_char = '\0';
@@ -224,7 +168,7 @@ fn main() -> io::Result<()> {
 		exit_function = cap[1].to_string();
 	}
 
-    re = RegexBuilder::new(r"^([\w\s]+)\s+[\s\\*]*(\w+)\([\w\s,\\*]*\)\s*(\w+)?\s*\{(\s+)(\})")
+    re = RegexBuilder::new(r"^([\w\s]+)\s+[\s\\*]*(\w+)\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\)\s*((?:[^(){};=]|\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\))*?)\s*\{(\s+)(\})")
         .multi_line(true)
         .build()
         .unwrap();
@@ -239,13 +183,13 @@ fn main() -> io::Result<()> {
 			pre_attr: caps[1].trim().to_string(),
 			is_init_exit: false,
         };
-		if fun.name == init_function.as_str() || fun.pre_attr == "__init" {
+		if fun.name == init_function.as_str() || fun.pre_attr.split_whitespace().any(|w| w == "__init") {
 			fun.is_init_exit = true;
 		}
-		if fun.name == exit_function.as_str() || fun.pre_attr == "__exit" {
+		if fun.name == exit_function.as_str() || fun.pre_attr.split_whitespace().any(|w| w == "__exit") {
 			fun.is_init_exit = true;
 		}
-		if (modify_first_mid_last || modify_all_functions) && fun.is_init_exit {
+		if skip_init_exit && fun.is_init_exit {
 			continue
 		}
         if exclude.iter().any(|ex| ex == &fun.name) {
@@ -253,6 +197,68 @@ fn main() -> io::Result<()> {
         }
 		functions.push(fun);
     }
+    functions
+}
+
+fn main() -> io::Result<()> {
+	let mut file_path = "";
+	let args: Vec<String> = env::args().collect();
+	let mut modify_first_mid_last = false;
+	let mut modify_all_functions = false;
+	let mut modify_fun_at_index: Option<usize> = None;
+	let mut modify_fun_with_name: Option<String> = None;
+	let mut add_before_fun_with_name: Option<String> = None;
+    let mut show_functions_list = false;
+	let mut exclude: Vec<String> = Vec::new();
+    let mut text_to_insert = "".to_string();
+
+	if args.len() == 2 {
+        file_path = args[1].as_str();
+        show_functions_list = true;
+    }
+	else if args.len() > 4 {
+		if args[1] == "mod_funcs" {
+			if args[2] == "-1" {
+				modify_first_mid_last = true;
+				file_path = args[3].as_str();
+                text_to_insert = args[4].as_str().to_owned();
+			} else if args[2] == "-2" {
+				modify_all_functions = true;
+				file_path = args[3].as_str();
+                text_to_insert = args[4].as_str().to_owned();
+                if args.len() > 6 && args[5] == "--exclude"  {
+                    for i in 6..args.len() {
+                        exclude.push(args[i].to_string());
+                    }
+                }
+			} else if args[2].bytes().all(|c| c.is_ascii_digit()) {
+                modify_fun_at_index = Some(args[2].parse::<usize>().unwrap());
+				file_path = args[3].as_str();
+                text_to_insert = args[4].as_str().to_owned();
+            } else {
+                modify_fun_with_name = Some(args[2].to_string());
+				file_path = args[3].as_str();
+                text_to_insert = args[4].as_str().to_owned();
+            }
+		} else if args[1] == "add_before_function" {
+            add_before_fun_with_name = Some(args[2].to_string());
+            file_path = args[3].as_str();
+            text_to_insert = args[4].as_str().to_owned();
+        }
+	} else {
+        println!("No valid parameters");
+        exit(1);
+    }
+
+    if !Path::new(file_path).exists() {
+        println!("File {} doesn't exists.", file_path);
+        exit(1);
+    }
+
+    text_to_insert = text_to_insert.replace("\\n", "\n");
+    let mut buffer = fs::read(file_path).unwrap();
+    let skip_init_exit = modify_first_mid_last || modify_all_functions;
+    let functions = find_functions(&buffer, &exclude, skip_init_exit);
     let mut write_the_buffer = false;
 	if modify_first_mid_last || modify_all_functions {
         if functions.is_empty() {
@@ -314,4 +320,96 @@ fn main() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fair_server_pick_task() {
+        let code = r#"
+static struct task_struct *
+fair_server_pick_task(struct sched_dl_entity *dl_se, struct rq_flags *rf)
+        __must_hold(__rq_lockp(dl_se->rq))
+{
+                                      
+}
+"#;
+        let functions = find_functions(code.as_bytes(), &[], false);
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].name, "fair_server_pick_task");
+        assert_eq!(functions[0].pre_attr, "static struct task_struct");
+    }
+
+    #[test]
+    fn test_standard_functions() {
+        let code = r#"
+static ssize_t proc_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+	return 0;
+}
+
+static int __init test_module_init(void)
+{
+	return 0;
+}
+"#;
+        let functions = find_functions(code.as_bytes(), &[], false);
+        assert_eq!(functions.len(), 2);
+        assert_eq!(functions[0].name, "proc_read");
+        assert_eq!(functions[1].name, "test_module_init");
+        assert!(functions[1].is_init_exit);
+    }
+
+    #[test]
+    fn test_function_with_multiple_annotations() {
+        let code = r#"
+static void *
+my_complex_func(struct rq *rq, int cpu)
+    __acquires(rq->lock)
+    __must_hold(rq->lock)
+{
+    return NULL;
+}
+"#;
+        let functions = find_functions(code.as_bytes(), &[], false);
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].name, "my_complex_func");
+        assert_eq!(functions[0].pre_attr, "static void");
+    }
+
+    #[test]
+    fn test_variadic_and_array_params() {
+        let code = r#"
+int printk(const char *fmt, ...)
+{
+    return 0;
+}
+
+int helper_proc_read(char buf[128], size_t count)
+{
+    return 0;
+}
+"#;
+        let functions = find_functions(code.as_bytes(), &[], false);
+        assert_eq!(functions.len(), 2);
+        assert_eq!(functions[0].name, "printk");
+        assert_eq!(functions[1].name, "helper_proc_read");
+    }
+
+    #[test]
+    fn test_function_prototype_not_matched() {
+        let code = r#"
+extern void helper_proto(int x);
+static struct task_struct *fair_server_pick_task(struct sched_dl_entity *dl_se, struct rq_flags *rf);
+
+void actual_function(int a)
+{
+}
+"#;
+        let functions = find_functions(code.as_bytes(), &[], false);
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].name, "actual_function");
+    }
 }

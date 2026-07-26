@@ -90,6 +90,47 @@ generateModuleName()
 }
 export -f generateModuleName
 
+isKernelNewerThan()
+{
+    local check_version="$1"
+    local tested_version="${KERNEL_VERSION}"
+
+    if [[ "$check_version" == "$tested_version" ]]; then
+        return 1
+    fi
+
+    # Zamiana "-rc" na "~rc" dla obu wersji
+    # Trik dla GNU sort -V: tylda sprawia, że pre-release ląduje przed wersją stabilną
+    local safe_tested="${tested_version//-rc/~rc}"
+    local safe_check="${check_version//-rc/~rc}"
+
+    # Znalezienie nowszej wersji za pomocą sort -V
+    local newer_version
+    newer_version=$(printf "%s\n%s" "$safe_tested" "$safe_check" | sort -V | tail -n 1)
+
+    # Jeśli nowszą wersją (po sortowaniu) jest ta przekazana w argumencie, zwróć 0 (prawda)
+    if [[ "$newer_version" == "$safe_tested" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+isKernelNewerOrEqualThan()
+{
+    local check_version="$1"
+    local tested_version="${KERNEL_VERSION}"
+
+    if [[ -z "$check_version" || -z "$tested_version" ]]; then
+        echo "Błąd: Brak sprawdzanej wersji lub zmiennej KERNEL_VERSION." >&2
+        return 2
+    fi
+
+    [[ "$check_version" == "$tested_version" ]] && return 0
+
+    isKernelNewerThan "$check_version"
+}
+
 appendToFunctionAt()
 {
 	local file=$1
@@ -675,26 +716,30 @@ buildKernelToLaunch()
 		srcDir="\$HOME/linux"
 		local tag=$(remoteShOut git -C $srcDir describe --exact-match --tags)
 		# replace "/" with "_" in tag
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!TAG=$tag"
 		tag=${tag//\//_}
-		echo "!!!!!!!!!!!!!!!!!!!!!!!!TAG=$tag"
 		local cacheFile="\$HOME/linux-trees/cache/vm_$tag.buildcache"
-		logInfo "Building the kernel...  $modifiedSrcFiles"
+		logInfo "Building the kernel..."
 		#KBUILD_BUILD_TIMESTAMP=0 KBUILD_BUILD_VERSION=1 KDEB_PKGVERSION=1;
-		local cmd="
-					find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;
-					export KBUILD_BUILD_HOST=$exportBuildHost;
-					make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
-					ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
-						>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
-						exit 1;
-					};"
+		local cmd="find . -maxdepth 1 \\( -name \"*.deb\" -o -name \"*_amd64.buildinfo\" -o -name \"*_amd64.changes\" \\) -delete;"
 		if [[ $modifiedSrcFiles == "" && -e $cacheFile ]]; then
 			cmd+="
 					echo 'Restoring build cache...';
-					# tar -xf $cacheFile 2>&1;
-					"
-		elif [[ $modifiedSrcFiles == "" &&  ! -e $cacheFile ]]; then
+					time tar -I 'pzstd --ultra -20' -xf $cacheFile 2>&1;
+				"
+		else
+			cmd+="
+					export KBUILD_BUILD_HOST=$exportBuildHost;
+					make $extraparams -C linux bindeb-pkg -j\$(nproc) 2>&1;
+				"
+		fi
+		cmd+="
+				ls ./linux-image-*_amd64.deb 2>&1 > /dev/null || {
+					>&2 echo \"Can't find any linux-image-*_amd64.deb files\";
+					exit 1;
+				};
+			"
+		# Create build cache if kernel sources are not modified and cache file does not exist
+		if [[ $modifiedSrcFiles == "" &&  ! -e $cacheFile ]]; then
 			cmd+="
 					echo 'Creating build cache...';
 					time tar -I 'pzstd --ultra -20' -cpf $cacheFile linux;
@@ -767,6 +812,10 @@ prepareKernel()
 			tag="Ubuntu-hwe-6.11-6.11.0-17.17_24.04.2"
 		elif [[ $version == v6.14 ]]; then
 			tag="origin/hwe-6.14-next"
+		elif [[ $version == v6.17 ]]; then
+			tag="origin/hwe-6.17-next"
+		elif [[ $version == v7.0 ]]; then
+			tag="origin/hwe-7.0-next"
 		else
 			tag="Ubuntu-6.8.0-49.49"
 		fi
@@ -1079,7 +1128,12 @@ exitError()
 
 exitDirtyError()
 {
-	exitError $?
+	local code=$1
+	if [[ $code == "" ]]; then
+		exitError $?
+	else
+		exitError $code
+	fi
 }
 
 function crosKernelVersion()

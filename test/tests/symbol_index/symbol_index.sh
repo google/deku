@@ -17,6 +17,10 @@ modifyFunction()
 	local index=$4
 	local srcDir=$SOURCE_DIR
 
+	if [[ $KERNEL_VERSION == v6.18.* ]]; then
+		local funName=X$(filenameNoExt $file)
+    	sed -i "1s/^/unsigned long long $funName\(void\);\nunsigned long long $funName\(void\){return DEKU_TEST_INDEX;}\n/" "$srcDir/$file"
+	fi
     sed -i "1s/^/static unsigned long long DEKU_TEST_INDEX = ${index}000000000;\n/" "$srcDir/$file"
 	appendToFunction "$srcDir/$file" \
 					 "$function" \
@@ -57,7 +61,7 @@ test()
 	addTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "CMD='ip -s -s neigh flush all 2>&1 >/dev/null'; eval \$CMD; eval sudo \$CMD; wget -q --spider google.com"
 	addTest "fs/open.c" "chmod_common" "rm -f /tmp/a; touch /tmp/a; chmod 644 /tmp/a"
 	addTest "fs/readdir.c" "filldir64" "sleep 2"
-	if [[ $KERNEL_VERSION == v6.14* || $KERNEL_VERSION =~ ^v[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
+	if isKernelNewerOrEqualThan v6.14; then
 		addTest "mm/vma.c" "mmap_region" "sleep 2"
 	else
 		[[ $VM_TEST == "" ]] && addTest "mm/mmap.c" "mmap_region" "sleep 2"
@@ -69,7 +73,7 @@ test()
 		modifyFunction ${files[$i]} ${functions[$i]} "DEKU_TEST_INDEX" $((i+1))
 	done
 
-	buildKernelToLaunch || exitDirtyError 1
+	buildKernelToLaunch || exitError
 
 	revertChanges
 
@@ -81,14 +85,14 @@ test()
 	runQemu
 
 	clearLogs
-	dekuDeploy -v || exitDirtyError 2
+	dekuDeploy -v || exitError
 
 	for i in $(eval echo "{0..$((count-1))}")
 	do
 		local func=${functions[$i]}
 		text="xDEKU_TEST_INDEX ($func): $((i+1))00"
 		checkFunCall $func "${cmds[$i]}" "$text"
-		[[ $? != 0 ]] && logErr "Failed to find log from call $func" && exitDirtyError 3
+		[[ $? != 0 ]] && logErr "Failed to find log from call $func" && exitError
 		logInfo "Found \"$text\" in demsg"
 	done
 
@@ -107,12 +111,10 @@ test()
 		logErr "Expected:\n$expected"
 		logErr "Got:\n$indexes"
 		logErr "Fail!"
-		exitDirtyError 4
+		exitError
 	fi
 
 	logStep "OK"
-
-	exitDirtyError 0
 }
 
 main()

@@ -80,7 +80,7 @@ function addKernelSet(name, ...versions)
 		const kernelCellV = headRowV.insertCell();
 		let text = versions[i];
 		if (!text.startsWith("v"))
-			text = "v6.x"
+			text = "v7.x"
 		kernelCellV.innerHTML = '<th><div style="display:flex"><div style="flex-grow: 1">' + text + '</div><div class="cellMenu"></div></div></th>';
 		addCellMenu(kernelCellV, "*", name, text);
 	}

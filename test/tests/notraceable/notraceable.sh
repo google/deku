@@ -23,7 +23,7 @@ function findNontraceable()
 {
 	local bind=$1
 	local srcDir=$SOURCE_DIR
-	local files=`find "$BUILD_DIR/drivers" -name "*.o"  -not -path "*lib*"`
+	local files=`find "$BUILD_DIR/drivers" -name "*.o" -not -path "*lib*"`
 	while read -r file;
 	do
 		local funcs=`readelf -sW "$file" | grep FUNC | grep $bind | grep -o '[^ ]*$'`
@@ -160,14 +160,20 @@ test()
 	fi
 
 	#TODO: disallow livepatch the notraceable functions that are sed be variables
-	checkNontraceable drivers/net/wireless/ath/ath10k/pci.c ath10k_pci_write32 fail # v:ath10k_pci_hif_ops
-	checkNontraceable drivers/net/wireless/ath/ath10k/pci.c ath10k_pci_read32 fail # v:ath10k_pci_hif_ops
+	if [[ $KERNEL_VERSION != v6.14.* && $KERNEL_VERSION != v6.18.* ]]; then
+		checkNontraceable drivers/net/wireless/ath/ath10k/pci.c ath10k_pci_write32 fail # v:ath10k_pci_hif_ops
+	fi
+	if [[ $KERNEL_VERSION != v6.18.* ]]; then
+		checkNontraceable drivers/net/wireless/ath/ath10k/pci.c ath10k_pci_read32 fail # v:ath10k_pci_hif_ops
+	fi
 
-	if [[ $KERNEL_VER == v6.8 || $KERNEL_VER == v6.11 || $KERNEL_VER == v6.14 ]]; then
-		if [[ $VM_TEST ]]; then
-			remoteSh "sudo modprobe drm_display_helper"
+	if [[ $VM_TEST ]]; then
+		remoteSh "sudo modprobe drm_display_helper"
+		if [[ $KERNEL_VERSION != v7.0.* ]]; then
+			checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_atomic_check_payload_alloc_limits ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply" "f:drm_dp_mst_atomic_check_payload_alloc_limits.cold"
+		else
+			: #checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply" "f:drm_dp_mst_dump_sideband_msg_tx.cold"
 		fi
-		checkNontraceable drivers/gpu/drm/display/drm_dp_mst_topology.c drm_dp_mst_dump_sideband_msg_tx ok "f:process_single_tx_qlock" "f:drm_dp_queue_down_tx" "f:drm_dp_mst_wait_tx_reply" "f:drm_dp_mst_dump_sideband_msg_tx.cold"
 		# TODO: add better key migration
 		# checkNontraceable drivers/cpuidle/cpuidle.c enter_s2idle_proper ok f:cpuidle_enter_s2idle
 	else

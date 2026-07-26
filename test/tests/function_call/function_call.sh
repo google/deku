@@ -55,14 +55,17 @@ test()
 	functionCallTest "net/ipv4/tcp_ipv4.c" "tcp_v4_connect" "$downloadCmd"
 	functionCallTest "fs/timerfd.c" "timerfd_triggered" "sleep 2; dmesg | grep -q timerfd_triggered || { grep -q CHROMEOS /etc/lsb-release && /usr/local/autotest/bin/autologin.py > /dev/null 2>&1; }"
 	functionCallTest "fs/readdir.c" "filldir64" "timeout 10 nautilus"
-	if [[ $KERNEL_VERSION == v6.14* || $KERNEL_VERSION == v6.18* ]]; then
+	if isKernelNewerOrEqualThan v6.14; then
 		functionCallTest "mm/vma.c" "mmap_region" "sleep 2"
 	else
 		if [[ ! $ANDROID ]]; then
 			functionCallTest "mm/mmap.c" "mmap_region" "sleep 2"
 		fi
 	fi
-	functionCallTest $fairSched "pick_next_task_fair" "sleep 1"
+	local pickTaskFun=pick_next_task_fair
+	isKernelNewerThan v6.18 && pickTaskFun=pick_task_fair
+	
+	functionCallTest $fairSched "$pickTaskFun" "sleep 1"
 	# ? functionCallTest "kernel/sched/core.c" "select_task_rq" "sleep 2"
 	# functionCallTest "net/core/neighbour.c" "neigh_alloc" "sudo ip -s -s neigh flush all; $downloadCmd"
 	if [[ ! $ANDROID ]]; then

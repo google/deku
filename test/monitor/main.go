@@ -46,9 +46,9 @@ type KernelSet struct {
 }
 
 var kernelSets = []KernelSet{
-	KernelSet{"qemu", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12", "origin/master"}},
+	KernelSet{"qemu", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12", "v6.18", "origin/master"}},
 	KernelSet{"cros", []string{"v5.10", "v5.15", "v6.1", "v6.6", "v6.12"}},
-	KernelSet{"vm-ubuntu", []string{"v6.8", "v6.11", "v6.14"}},
+	KernelSet{"vm-ubuntu", []string{"v6.8", "v6.11", "v6.14", "v6.17", "v7.0"}},
 	KernelSet{"android", []string{"v6.12"}},
 }
 
@@ -386,6 +386,9 @@ func scheduleTestOnAgent(e ui.Event) any {
 	kernel := strings.Split(args, " ")[3]
 	priority := strings.Split(args, " ")[4]
 
+	if strings.HasSuffix(kernel, ".x") {
+		kernel = "origin/master"
+	}
 	if testName == "*" && priority == "low" {
 		kernelSet := getKernelSet(system)
 		for _, ker := range kernelSet.kernels {

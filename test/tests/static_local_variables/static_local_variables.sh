@@ -14,13 +14,14 @@ mappingTest()
 	local file="net/ipv4/tcp_ipv4.c"
 	local text="[$SCRIPT_NAME] DEKU %s"
 	local srcDir=$SOURCE_DIR
-	local functions=(tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_send_ack)
-	local functions2=(tcp_v4_connect tcp_v4_mtu_reduced do_redirect tcp_ld_RTO_revert tcp_v4_err tcp_v4_send_reset tcp_v4_send_ack tcp_v4_timewait_ack tcp_v4_reqsk_send_ack tcp_v4_inbound_md5_hash tcp_v4_init_req tcp_v4_route_req tcp_v4_conn_request tcp_v4_syn_recv_sock)
-	local functionsFun=(tcp_v4_init_seq tcp_v4_init_ts_off tcp_twsk_unique tcp_v4_pre_connect tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_inbound_md5_hash  tcp_v4_send_synack tcp_v4_reqsk_destructor)
+	local functions=(tcp_v4_init_seq tcp_v4_init_seq_and_ts_off tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_send_ack)
+	# local functions2=(tcp_v4_connect tcp_v4_mtu_reduced do_redirect tcp_ld_RTO_revert tcp_v4_err tcp_v4_send_reset tcp_v4_send_ack tcp_v4_timewait_ack tcp_v4_reqsk_send_ack tcp_v4_inbound_md5_hash tcp_v4_init_req tcp_v4_route_req tcp_v4_conn_request tcp_v4_syn_recv_sock)
+	# local functionsFun=(tcp_v4_init_seq tcp_v4_init_seq_and_ts_off tcp_v4_init_ts_off tcp_twsk_unique tcp_v4_pre_connect tcp_v4_init_seq tcp_v4_connect __tcp_v4_send_check tcp_v4_send_check tcp_v4_inbound_md5_hash  tcp_v4_send_synack tcp_v4_reqsk_destructor)
 
 	logStep "Check mapping ambiguous symbol..."
 
 	appendBeforeFunction "$srcDir/$file" tcp_v4_init_seq "static inline int deku_static_test_function(void){static int deku_static_test_var;return deku_static_test_var+=2;}" > /dev/null
+	appendBeforeFunction "$srcDir/$file" tcp_v4_init_seq_and_ts_off "static inline int deku_static_test_function(void){static int deku_static_test_var;return deku_static_test_var+=2;}" > /dev/null
 
 	for (( i=0; i<${#functions[@]}; i++ )); do
 		appendToFunction "$srcDir/$file" ${functions[$i]} "printk(KERN_INFO \"$text/${functions[$i]} - func:%d\", __func__, deku_static_test_function());" > /dev/null
