@@ -16,9 +16,23 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <dirent.h>
+#include <regex.h>
 
 #include "kbuild.h"
 #include "libelfutils.h"
+
+#ifndef TOOLCHAIN
+#define TOOLCHAIN ""
+#endif
+
+#ifndef RED
+#define RED "\x1b[31m"
+#endif
+
+#ifndef NC
+#define NC "\x1b[0m"
+#endif
 
 Config config;
 
@@ -613,4 +627,186 @@ int buildFile(const char *srcFile, const char *compileFile, const char *outFile)
 	free(r_outFile);
 	free(extraCmd);
 	return 0;
+}
+
+static void remove_temp_obj_files(const char *dirpath) {
+	DIR *dir = opendir(dirpath);
+	if (!dir) return;
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		char *fullpath = filepathJoin(dirpath, entry->d_name);
+		struct stat st;
+		if (lstat(fullpath, &st) == 0) {
+			if (S_ISDIR(st.st_mode)) {
+				remove_temp_obj_files(fullpath);
+			} else {
+				size_t len = strlen(entry->d_name);
+				if ((len >= 3 && entry->d_name[0] == '_' && strcmp(entry->d_name + len - 2, ".o") == 0) ||
+					strcmp(entry->d_name, "_*.o") == 0) {
+					unlink(fullpath);
+				}
+			}
+		}
+		free(fullpath);
+	}
+	closedir(dir);
+}
+
+int buildModules(const char *moduleDir) {
+	char *args[10];
+	int arg_idx = 0;
+	args[arg_idx++] = "make";
+	char cross_compile_arg[PATH_MAX];
+	if (config.isAARCH64) {
+		args[arg_idx++] = "ARCH=arm64";
+		snprintf(cross_compile_arg, sizeof(cross_compile_arg), "CROSS_COMPILE=%s", TOOLCHAIN);
+		args[arg_idx++] = cross_compile_arg;
+	}
+	if (config.useLLVM && config.useLLVM[0] != '\0') {
+		args[arg_idx++] = config.useLLVM;
+	}
+	args[arg_idx] = NULL;
+
+	int pipefd[2];
+	if (pipe(pipefd) < 0) {
+		LOG_ERR("Failed to create pipe for module build");
+		return -1;
+	}
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		perror("fork");
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return -1;
+	}
+
+	if (pid == 0) {
+		close(pipefd[0]);
+		if (dup2(pipefd[1], STDOUT_FILENO) < 0 || dup2(pipefd[1], STDERR_FILENO) < 0) {
+			perror("dup2");
+			_exit(1);
+		}
+		close(pipefd[1]);
+		if (chdir(moduleDir) != 0) {
+			perror("chdir");
+			_exit(1);
+		}
+		execvp(args[0], args);
+		perror("execvp");
+		_exit(1);
+	}
+
+	close(pipefd[1]);
+
+	size_t cap = 4096;
+	size_t len = 0;
+	char *out = malloc(cap);
+	if (out) {
+		ssize_t n;
+		while ((n = read(pipefd[0], out + len, cap - len - 1)) > 0) {
+			len += n;
+			if (cap - len < 1024) {
+				cap *= 2;
+				char *tmp = realloc(out, cap);
+				if (!tmp) {
+					LOG_ERR("Failed to reallocate memory for make output");
+					break;
+				}
+				out = tmp;
+			}
+		}
+		out[len] = '\0';
+	}
+	close(pipefd[0]);
+
+	int status = 0;
+	waitpid(pid, &status, 0);
+
+	int build_failed = 0;
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		build_failed = 1;
+	}
+
+	char *logPath = filepathJoin(moduleDir, "build.log");
+	FILE *fileLog = fopen(logPath, "w");
+	if (!fileLog) {
+		LOG_ERR("Failed to create logs file: %s", logPath);
+	} else {
+		if (out && len > 0) {
+			fwrite(out, 1, len, fileLog);
+		}
+		fclose(fileLog);
+	}
+	free(logPath);
+
+	if (build_failed) {
+		bool errorCaught = false;
+		if (out && len > 0) {
+			const char *regexErr = "^.*(/[^/:]+\\.[^/:]+):([0-9]+):[0-9]+:.* error: (.+)$";
+			regex_t regex;
+			if (regcomp(&regex, regexErr, REG_EXTENDED | REG_NEWLINE) == 0) {
+				char *copy = strdup(out);
+				if (copy) {
+					char *line = copy;
+					char *next = NULL;
+					while (line && *line != '\0') {
+						next = strchr(line, '\n');
+						if (next) {
+							*next = '\0';
+							if (next > line && *(next - 1) == '\r') {
+								*(next - 1) = '\0';
+							}
+						}
+						regmatch_t matches[4];
+						if (regexec(&regex, line, 4, matches, 0) == 0) {
+							char *file = strndup(line + matches[1].rm_so, matches[1].rm_eo - matches[1].rm_so);
+							char *no_str = strndup(line + matches[2].rm_so, matches[2].rm_eo - matches[2].rm_so);
+							char *err_str = strndup(line + matches[3].rm_so, matches[3].rm_eo - matches[3].rm_so);
+							int no = atoi(no_str);
+
+							errorCaught = true;
+							LOG_INFO("%s:%d %serror:%s %s. See more: %s", file, no, RED, NC, err_str, "fileLog");
+
+							free(file);
+							free(no_str);
+							free(err_str);
+							break;
+						}
+						line = (next ? next + 1 : NULL);
+					}
+					free(copy);
+				}
+				regfree(&regex);
+			}
+		}
+
+		if (!errorCaught) {
+			printf("Error:\n");
+			if (out && len > 0) {
+				printf("%s", out);
+				if (out[len - 1] != '\n') {
+					printf("\n");
+				}
+			}
+		}
+
+		remove_temp_obj_files(moduleDir);
+		free(out);
+		return -1;
+	}
+
+	free(out);
+	return 0;
+}
+
+int buildLivepatchModule(const char *moduleDir) {
+	char *fileLog = filepathJoin(moduleDir, "build.log");
+	char *oldFileLog = filepathJoin(moduleDir, "build_modules.log");
+	rename(fileLog, oldFileLog);
+	free(fileLog);
+	free(oldFileLog);
+	return buildModules(moduleDir);
 }

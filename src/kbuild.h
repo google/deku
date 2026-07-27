@@ -23,5 +23,7 @@ typedef struct {
 extern Config config;
 
 int buildFile(const char *srcFile, const char *compileFile, const char *outFile);
+int buildModules(const char *moduleDir);
+int buildLivepatchModule(const char *moduleDir);
 
 #endif /* DEKU_KBUILD_H */
